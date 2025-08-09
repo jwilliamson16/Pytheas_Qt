@@ -13,8 +13,8 @@ from Bio import SeqIO
 from pyteomics import mgf,mzml
 import pandas as pd
 
-from pytheas_modules.pytheas_global_vars import pgv, pgc, pgvdict
-from pytheas_modules.pytheas_objects import nt_fragment, MS2_spectrum
+from pytheas_global_vars import pgv, pgc, pgvdict
+from pytheas_objects import nt_fragment, MS2_spectrum
 
 def read_pytheas_file(file):
     error = None

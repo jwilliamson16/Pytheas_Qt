@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 # -*- coding: utf-8 -*-
 """
 Created on Mon Nov 11 10:05:36 2024
@@ -9,7 +10,7 @@ Created on Mon Nov 11 10:05:36 2024
 import math
 import numpy as np
 
-from pytheas_modules.pytheas_global_vars import pgv, pgc
+from pytheas_global_vars import pgv, pgc
 
 class nt_fragment: # class for nucleotide group fragments
     def __init__(self, base, df, label):

@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (QWidget, QLabel, QPushButton, QGridLayout,
 from PyQt5.QtCore import pyqtSignal
 import os
 
-from pytheas_modules.pytheas_global_vars import pgv, pgc, pgvdict, PGVStrToType
+from pytheas_global_vars import pgv, pgc, pgvdict, PGVStrToType
 
 
 # PytheasWidgets 

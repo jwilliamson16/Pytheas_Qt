@@ -26,12 +26,12 @@ import xlsxwriter
 
 
 # pytheas modules
-from pytheas_modules.pytheas_global_vars import pgv, pgc, pgvdict, PGVStrToType, PGVTypeToStr
-from pytheas_modules.digest import digest
-from pytheas_modules.matching import pytheas_matching
-from pytheas_modules.match_functions import match_output_keys
-from pytheas_modules.pytheas_IO import read_pytheas_file, read_json, load_json_files
-from pytheas_modules.Pytheas_Qt_widgets import (PytheasRadioButtonBar, PytheasCheckBoxBar, PytheasEntry,
+from pytheas_global_vars import pgv, pgc, pgvdict, PGVStrToType, PGVTypeToStr
+from digest import digest
+from match import match
+from match_functions import match_output_keys
+from pytheas_IO import read_pytheas_file, read_json, load_json_files
+from Pytheas_Qt_widgets import (PytheasRadioButtonBar, PytheasCheckBoxBar, PytheasEntry,
                                                 PytheasDirectory, PytheasFile, PytheasFileOutput,
                                                 PytheasLabel, PytheasPanel, PytheasFixedPanel, 
                                                 PytheasOptionPanel, PytheasButton, PytheasButtonPanel)
@@ -79,10 +79,10 @@ class Logger(object):
 
 # # print("sys.argv after pytheas_module import: ", sys.argv)
 
-# import pytheas_modules.pytheas_final_report as fr
-# import pytheas_modules.pytheas_mapping as ma
-# import pytheas_modules.pytheas_visualization_html as vi
-# import pytheas_modules.digest_new_8 as dn
+# import pytheas_final_report as fr
+# import pytheas_mapping as ma
+# import pytheas_visualization_html as vi
+# import digest_new_8 as dn
 
 def Load_Global_Vars():
 
@@ -334,7 +334,7 @@ def matchSpectra():
     except:
         Error("No Digest dictionaries present", "Either Run In_Silico_Digest or Load Digest Files")
         return
-    pytheas_matching()
+    match()
     TimeStampParameters("matching", next_dir)
     print("Done with Matching MS2 spectra")
     logger.close()

@@ -24,8 +24,8 @@ from PyQt5.QtGui import QPixmap, QImage
 from PyQt5.QtCore import Qt
 
 
-from pytheas_modules.pytheas_global_vars import  pgv, pgc
-from pytheas_modules.digest_functions import generate_mod_seq
+from pytheas_global_vars import  pgv, pgc
+from digest_functions import generate_mod_seq
 
 class ion_text_label:
     def __init__(self, text, text_object, x, y):

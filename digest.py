@@ -12,10 +12,10 @@ from datetime import datetime
 from pathlib import Path
 
 
-from pytheas_modules.pytheas_global_vars import pgv, pgc
-from pytheas_modules.digest_functions import (add_modifications, enzyme_digest, add_precursor_ions,
+from pytheas_global_vars import pgv, pgc
+from digest_functions import (add_modifications, enzyme_digest, add_precursor_ions,
                             build_frag_dict, build_precursor_dict,  output_digest_file)
-from pytheas_modules.pytheas_IO import read_pytheas_file, save_json_files
+from pytheas_IO import read_pytheas_file, save_json_files
 
 def digest():
 

@@ -19,13 +19,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-from pytheas_modules.pytheas_global_vars import pgv, pgc
-from pytheas_modules.pytheas_objects import fragment_sequence, MS2_spectrum
-from pytheas_modules.digest_functions import generate_molecular_graph, generate_mod_seq
-from pytheas_modules.scoring_functions import (ppm_range, ppm_offset, sumI_all, sumI, n_calc, L_calc,
+from pytheas_global_vars import pgv, pgc
+from pytheas_objects import fragment_sequence, MS2_spectrum
+from digest_functions import generate_molecular_graph, generate_mod_seq
+from scoring_functions import (ppm_range, ppm_offset, sumI_all, sumI, n_calc, L_calc,
                                 consecutive_series)
-from pytheas_modules.worksheet_functions import format_worksheet_columns
-from pytheas_modules.ms2_plot import ms2_plot, labeled_matrix_plot
+from worksheet_functions import format_worksheet_columns
+from ms2_plot import ms2_plot, labeled_matrix_plot
 
 def match_spectra():
     ms2_ctr = 0

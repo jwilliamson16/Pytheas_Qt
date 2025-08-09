@@ -12,14 +12,14 @@ import os
 from pathlib import Path
 
 
-from pytheas_modules.pytheas_global_vars import pgv, pgc
-from pytheas_modules.pytheas_IO import read_pytheas_file, save_json_files
-from pytheas_modules.match_functions import (match_spectra, unpack_match_dict, iTRAQ_quantitation, 
+from pytheas_global_vars import pgv, pgc
+from pytheas_IO import read_pytheas_file, save_json_files
+from match_functions import (match_spectra, unpack_match_dict, iTRAQ_quantitation, 
                                  output_match_dict_file, match_output_keys, 
                                  consolidated_match_output, make_sequence_plot, 
                                  make_long_sequence_plot, plot_ms2_spectra)
 
-from pytheas_modules.match_functions import ppm_offset_plot,top_Sp_histogram
+from match_functions import ppm_offset_plot,top_Sp_histogram
 
 # nctr = 0
 def match():    

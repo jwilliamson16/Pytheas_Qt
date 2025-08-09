@@ -15,10 +15,10 @@ import xlsxwriter
 import networkx as nx
 import pandas as pd
 
-from pytheas_modules.pytheas_global_vars import pgv
-from pytheas_modules.pytheas_IO import read_pytheas_file
-from pytheas_modules.pytheas_objects import fragment_sequence
-from pytheas_modules.worksheet_functions import format_worksheet_columns
+from pytheas_global_vars import pgv
+from pytheas_IO import read_pytheas_file
+from pytheas_objects import fragment_sequence
+from worksheet_functions import format_worksheet_columns
 
 
 

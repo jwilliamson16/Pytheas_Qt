@@ -7,7 +7,7 @@ Created on Thu Mar 28 13:46:53 2024
 """
 import numpy as np
 
-from pytheas_modules.pytheas_global_vars import pgv, pgc
+from pytheas_global_vars import pgv, pgc
 
 
 def ppm_range(value, ppm): # Calculate incertitude on MS1/MS2 masses equivalent to given ppm
