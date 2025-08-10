@@ -86,26 +86,23 @@ class Logger(object):
 
 def Load_Global_Vars():
 
-    print("Load_Global_Vars")
-    print("working_dir", pgv.working_dir)
-    print("save_value", pgv.pytheas_parameters_save)
+    # print("Load_Global_Vars")
+    # print("working_dir", pgv.working_dir)
+    # print("save_value", pgv.pytheas_parameters_save)
     ppar_file = os.path.join(pgv.working_dir, pgv.pytheas_parameters_save)
 
-    print("loading from ", ppar_file)
+    print("Loading Parameters from ", ppar_file)
     if not os.path.exists(ppar_file):
         Error("ERROR: pytheas.py: Load_Global_Vars():" + ppar_file + " does not exist!", 
               "Try Load_Previous Globals or enter parameters manually ")
         return
     
     df = pd.read_excel(ppar_file)
-             
-    # for index,row in df.iterrows():
-    #     if row['names'] in pgv.widget_dict:
-    #         pgv.widget_dict[row['names']].load_value(str(row['values']))
-    #         # print(row['names'],row['values'])
-    #     else:
-    #         print("No widget for ", row['names'], "...skipping")
-
+    
+    # global vars in three places
+        # pgvdict:  this is used for convenient Save_Global_Vars
+        # pgv namespace for convenient access in code
+        # pgv.widget_dict to update Qt widgets 
     for index,row in df.iterrows():
         var = row["names"]
         val = row["values"]
@@ -113,24 +110,12 @@ def Load_Global_Vars():
             vtype = pgvdict[var]["data_type"]
             vval = PGVStrToType(vtype,val)
         try:
-            print("updating", var, vval )
-            if var == "enzymes":
-                continue
-            setattr(pgv, var, vval)   # HOW DOES THIS UPDATE WIDGET????
-            print("just updated", var, vval)
-            # print(var, vtype, val, vval)
+             setattr(pgv, var, vval)   # update global var
+             if pgv.run == "CL" and var in pgv.widget_dict:
+                 pgv.widget_dict[var].load_value(str(val))  # update the widget
         except:
             print("No global variable for ", var,  "...skipping")
-            
-        if pgv.run == "CL":
-            if var in pgv.widget_dict:
-                pgv.widget_dict[var].load_value(str(val))
-        # try:
-        #    w = pgv.widget_dict[var]
-        #    w.value = val
-        # except:
-        #    print("Couldn't update widget for ", var,  "...skipping")
-            
+                    
 
 def Load_Previous_Globals():
     file_dialog = QFileDialog()
@@ -172,7 +157,8 @@ def Save_Global_Vars(path_list):
     par_df = pd.DataFrame(name_dict.items(), columns=["names", "values"])
     
     ppar_file = os.path.join(pgv.working_dir, *path_list)
-    
+
+#TODO move this to worksheet functions
     workbook = xlsxwriter.Workbook(ppar_file,{"nan_inf_to_errors": True})
     worksheet = workbook.add_worksheet(pgv.job_dir.split("/")[-1])
     

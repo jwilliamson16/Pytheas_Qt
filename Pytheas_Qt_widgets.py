@@ -22,6 +22,7 @@ class PytheasRadioButtonBar(QWidget):
         super().__init__()
         for key,val in pgvd.items(): # set up widget attributes
             setattr(self, key, val)
+            # print(key, val)
 
         self.layout = QGridLayout()
         self.label = QLabel(self.widget_text)
@@ -48,9 +49,13 @@ class PytheasRadioButtonBar(QWidget):
         self.load_value(self.default_value)
  
     def set_value(self): # monitor signal from widget
+        # print("RBB set_value", self.pgv, self.sender().text())
+        # print(self.sender.__dict__.keys())
+        # print(self.sender.__dir__)
         self.load_value(self.sender().text())
         
     def load_value(self, value):
+        # print("RBB load_value before", self.pgv, self.value)
         for rb in self.rb_list: 
             if rb.text() == str(value):
                 rb.setChecked(True)
@@ -58,6 +63,8 @@ class PytheasRadioButtonBar(QWidget):
                 rb.setChecked(False)
                 
         self.value = value
+        # print("RBB load_vaue after", self.pgv, self.value)
+
         setattr(pgv, self.pgv, PGVStrToType(self.data_type, self.value))
 
 class PytheasCheckBoxBar(QWidget):
