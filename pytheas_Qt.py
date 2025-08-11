@@ -35,8 +35,7 @@ from Pytheas_Qt_widgets import (PytheasRadioButtonBar, PytheasCheckBoxBar, Pythe
                                                 PytheasDirectory, PytheasFile, PytheasFileOutput,
                                                 PytheasLabel, PytheasPanel, PytheasFixedPanel, 
                                                 PytheasOptionPanel, PytheasButton, PytheasButtonPanel)
-
-
+from worksheet_functions import write_parameter_worksheet
 
 
 class Logger(object):
@@ -73,22 +72,36 @@ class Logger(object):
         if self.file != None:
             self.file.close()
             self.file = None
-            
-            
+                   
 # sys.stdout = Logger(pgv.working_dir + "/pytheas.log")
 
-# # print("sys.argv after pytheas_module import: ", sys.argv)
+##########  BUTTON FUNCTIONS
 
-# import pytheas_final_report as fr
-# import pytheas_mapping as ma
-# import pytheas_visualization_html as vi
-# import digest_new_8 as dn
+def Save_Globals_File(path_list):
+        
+    name_dict = {var: getattr(pgv,var) for var in pgvdict.keys()}
+    
+    for key, vval in name_dict.items():
+        vtype = pgvdict[key]["data_type"]
+        val = PGVTypeToStr(vtype, vval)
+        if type(val) != str:
+            val = str(val)
+        name_dict[key] = val
 
-def Load_Global_Vars():
+    par_df = pd.DataFrame(name_dict.items(), columns=["names", "values"])
+    ppar_file = os.path.join(pgv.working_dir, *path_list)
 
-    # print("Load_Global_Vars")
-    # print("working_dir", pgv.working_dir)
-    # print("save_value", pgv.pytheas_parameters_save)
+    write_parameter_worksheet(par_df, ppar_file)
+    print("saving parameters to ", ppar_file)
+    
+def Load_Globals_File(file_path):
+    default = pgv.pytheas_parameters_save
+    pgv.pytheas_parameters_save = file_path
+    Load_Global_Vars()
+    pgv.pytheas_parameters_save = default
+
+def Load_Global_Vars(): # button fuction
+
     ppar_file = os.path.join(pgv.working_dir, pgv.pytheas_parameters_save)
 
     print("Loading Parameters from ", ppar_file)
@@ -100,7 +113,7 @@ def Load_Global_Vars():
     df = pd.read_excel(ppar_file)
     
     # global vars in three places
-        # pgvdict:  this is used for convenient Save_Global_Vars
+        # pgvdict:  this is used for convenient Save_Globals_File
         # pgv namespace for convenient access in code
         # pgv.widget_dict to update Qt widgets 
     for index,row in df.iterrows():
@@ -116,124 +129,21 @@ def Load_Global_Vars():
         except:
             print("No global variable for ", var,  "...skipping")
                     
-
-def Load_Previous_Globals():
+def Load_Previous_Globals(): # button function
     file_dialog = QFileDialog()
     file_dialog.setWindowTitle("Select File")
     file_path, file = QFileDialog.getOpenFileName(None, pgv.working_dir, "Select Excel File", "")
-    default = pgv.pytheas_parameters_save
-    pgv.pytheas_parameters_save = file_path
-    Load_Global_Vars()
-    pgv.pytheas_parameters_save = default
+    Load_Globals_File(file_path)
+    # default = pgv.pytheas_parameters_save
+    # pgv.pytheas_parameters_save = file_path
+    # Load_Global_Vars()
+    # pgv.pytheas_parameters_save = default
 
-def Load_Globals_File(file_path):
-    default = pgv.pytheas_parameters_save
-    pgv.pytheas_parameters_save = file_path
-    Load_Global_Vars()
-    pgv.pytheas_parameters_save = default
-
-def Error(error_msg, info):
-    # msg = QMessageBox()
-    # msg.setIcon(QMessageBox.Critical)
-    # msg.setText("\n" + error_msg + "\n")
-    # msg.setInformativeText("\n" + info + "\n")
-    # msg.setWindowTitle("Error")
-    # msg.exec_()
-    print("ERROR: ", error_msg, info)
-
-def Save_Global_Vars(path_list):
-        
-    # name_dict = {var: pdict["value"] for var, pdict in pgvdict.items()}
-    name_dict = {var: getattr(pgv,var) for var in pgvdict.keys()}
-    
-    for key, vval in name_dict.items():
-        vtype = pgvdict[key]["data_type"]
-        val = PGVTypeToStr(vtype, vval)
-        # print(key, type(vval), val)
-        if type(val) != str:
-            val = str(val)
-        name_dict[key] = val
-
-    par_df = pd.DataFrame(name_dict.items(), columns=["names", "values"])
-    
-    ppar_file = os.path.join(pgv.working_dir, *path_list)
-
-#TODO move this to worksheet functions
-    workbook = xlsxwriter.Workbook(ppar_file,{"nan_inf_to_errors": True})
-    worksheet = workbook.add_worksheet(pgv.job_dir.split("/")[-1])
-    
-    bold = workbook.add_format()
-    bold.set_bold()
-    worksheet.set_column(0,0,25)
-    worksheet.set_column(1,1,100)
-    
-    # format_worksheet_columns(worksheet, par_df, fd)   # sets the column widths
-
-    for col in par_df.columns:  # output header
-        worksheet.write(0, par_df.columns.get_loc(col), col, bold)  # fd has user-defined label column if desired
-    
-    # write out each cell
-    rowidx = 1
-    for row in par_df.iterrows():
-        colidx = 0
-        for col in row[1].keys():
-            if type(row[1][col]) == list:
-                row[1][col] = ",".join(row[1][col])
-            worksheet.write(rowidx, colidx, row[1][col])
-            colidx +=1
-        rowidx +=1
-
-    # worksheet.show_gridlines = True
-    
-    workbook.close()
-    
-    # writer = pd.ExcelWriter(ppar_file) 
-    # df.style.set_properties(**{'text-align': 'left'})
-    # df.to_excel(writer, index=False, sheet_name='pytheas_parameters', na_rep='NaN')
-    # workbook  = writer.book
-    # worksheet = writer.sheets['pytheas_parameters']
-
-    # header_fmt = workbook.add_format({'bold': True})
-    # worksheet.set_row(0, None, header_fmt)
-    
-    # left_format = workbook.add_format({'align': 'left'})
-    
-    # col_idx = df.columns.get_loc("names")
-    # worksheet.set_column(col_idx, col_idx, 25)
-    # col_idx = df.columns.get_loc("values")
-    # worksheet.set_column(col_idx, col_idx, 100, left_format)
-
-    # writer.save()
-    print("saving parameters to ", os.path.basename(ppar_file))
-    print("saving parameters to ", ppar_file)
-
-def TimeStampParameters(module, next_dir):
-
-    # parameter_folder = os.path.join(pgv.working_dir, "parameter_history")      
-    # if not os.path.isdir(parameter_folder):
-    #     os.makedirs(parameter_folder)
-
-    if not os.path.isdir(pgv.job_dir):
-        print ("time stamp making directory....should not happen")
-        os.makedirs(pgv.job_dir)
-
-    file_base = module + "_parameters"
-    # timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M")
-    job = next_dir.split("_")[-1]
-    # par_file =  file_base + "_" + timestamp + ".xlsx"
-    par_file =  file_base + "_" + job + ".xlsx"
-
-    path_list = [pgv.job_dir, par_file]
-    print("parameter_file: ", path_list)
-    if pgv.run == "CL":
-        pgv.widget_dict["pytheas_parameters_save"].load_value(par_file)
-    Save_Global_Vars(path_list)
- 
-def Save_Global_Variables():
+def Save_Global_Variables(): # button function
     path_list = [pgv.pytheas_parameters_save]
-    Save_Global_Vars(path_list)
+    Save_Globals_File(path_list)
 
-def Print_Global_Vars():
+def Print_Global_Vars(): # button function
     print("PYTHEAS GLOBAL VARIABLES:")
     for var, widget in pgv.widget_dict.items():
         try:
@@ -241,14 +151,39 @@ def Print_Global_Vars():
         except:
             pass
 
-def Quit():
-    # sys.exit(app.exec())
+def LoadDigest():  # button function
+    
+    load_dir = QFileDialog.getExistingDirectory(None,"Select Job Directory", pgv.working_dir)
+    if load_dir == None:
+        return
+    print("loading previous digest from ", load_dir)
+    load_json_files(pgc.digest_json, load_dir)    
+    par_file = glob.glob(os.path.join(load_dir,'*parameters*.xlsx'))[0]
+    Load_Globals_File(par_file)
+    
+def LoadMatch(): # button function
+    
+    load_dir = QFileDialog.getExistingDirectory(None,"Select Job Directory", pgv.working_dir)
+    if load_dir == None:
+        return
+    print("loading previous match from ", load_dir)
+    load_json_files(pgc.match_json, load_dir)
+    par_file = glob.glob(os.path.join(load_dir,'*parameters*.xlsx'))[0]
+    # print("par file", par_file)
+    Load_Globals_File(par_file)
+    
+    load_dir = pgv.digest_job
+    print("loading previous digest from ", load_dir)
+    load_json_files(pgc.digest_json, load_dir)
+        
+def Quit(): # button function
     sys.exit()
      
- #  functions for pytheas modules
+########## FUNCTIONS FOR PYTHEAS MODULES
  
 def read_standard_files():
-    for w in std_file_list:
+    for w in pgv.std_file_list:
+        print("reading standard file ", w)
         if "light" in w and "light" not in pgv.isotopic_species:
             continue
         if "heavy" in w and "heavy" not in pgv.isotopic_species:
@@ -268,7 +203,6 @@ def setup_job_dir(module):
     else:
         last_dir = sorted(dir_list, key=lambda x: int(x.split("_")[-1]))[-1]
 
-        # last_dir = sorted(dir_list)[-1]
     m, j, n = last_dir.split("_")  
     next_dir = "_".join([module, j, format(int(n)+1, '03d')])
     pgv.job_dir = os.path.join(pgv.working_dir, next_dir)
@@ -277,8 +211,31 @@ def setup_job_dir(module):
     logger = Logger(logfile)
     return logger, next_dir
 
+def Error(error_msg, info):
+    # msg = QMessageBox()
+    # msg.setIcon(QMessageBox.Critical)
+    # msg.setText("\n" + error_msg + "\n")
+    # msg.setInformativeText("\n" + info + "\n")
+    # msg.setWindowTitle("Error")
+    # msg.exec_()
+    print("ERROR: ", error_msg, info)
 
-def inSilicoDigest():
+def SaveRunParameters(module, next_dir):
+
+    if not os.path.isdir(pgv.job_dir):
+        print ("time stamp making directory....should not happen")
+        os.makedirs(pgv.job_dir)
+
+    file_base = module + "_parameters"
+    job = next_dir.split("_")[-1]
+    par_file =  file_base + "_" + job + ".xlsx"
+    path_list = [pgv.job_dir, par_file]
+    print("parameter_file: ", path_list)
+    if pgv.run == "CL":
+        pgv.widget_dict["pytheas_parameters_save"].load_value(par_file) # apparently save file name to itself
+    Save_Globals_File(path_list)
+
+def inSilicoDigest():  # main pytheas module
     logger, next_dir = setup_job_dir("Digest")
     pgv.digest_job = next_dir
     if pgv.run == "CL":
@@ -298,11 +255,11 @@ def inSilicoDigest():
     error = digest()
     if error != None:
         Error("Error in " + error, "check fasta and mod input files!")
-    TimeStampParameters("digest", next_dir)
+    SaveRunParameters("digest", next_dir)
     print("Done with In Silico Digestion!")
     logger.close()
         
-def matchSpectra():
+def matchSpectra(): # main pytheas module
     logger, next_dir = setup_job_dir("Match")
     pgv.match_job = next_dir
     if pgv.run == "CL":
@@ -321,7 +278,7 @@ def matchSpectra():
         Error("No Digest dictionaries present", "Either Run In_Silico_Digest or Load Digest Files")
         return
     match()
-    TimeStampParameters("matching", next_dir)
+    SaveRunParameters("matching", next_dir)
     print("Done with Matching MS2 spectra")
     logger.close()
 
@@ -335,7 +292,7 @@ def matchSpectra():
 #     print("initial mod set", pgv.modification_set)
 #     dis.discovery()
 #     print("after discovery", pgv.modification_set)
-#     TimeStampParameters("discovery")
+#     SaveRunParameters("discovery")
 #     print("after timestamp", pgv.modification_set)
 #     print("Done with Discovery")
 
@@ -356,55 +313,8 @@ def matchSpectra():
 #     print("Under construction")
 #     pass
 
-def LoadDigest():
-    
-    load_dir = QFileDialog.getExistingDirectory(None,"Select Job Directory", pgv.working_dir)
-    if load_dir == None:
-        return
-    
-    print("loading previous digest from ", load_dir)
 
-    load_json_files(pgc.digest_json, load_dir)    
-    par_file = glob.glob(os.path.join(load_dir,'*parameters*.xlsx'))[0]
-    print("par file", par_file)
-    Load_Globals_File(par_file)
-    
-
-    
-def LoadMatch():
-    
-    load_dir = QFileDialog.getExistingDirectory(None,"Select Job Directory", pgv.working_dir)
-    if load_dir == None:
-        return
-    
-    print("loading previous match from ", load_dir)
-
-    load_json_files(pgc.match_json, load_dir)
-    par_file = glob.glob(os.path.join(load_dir,'*parameters*.xlsx'))[0]
-    print("par file", par_file)
-    Load_Globals_File(par_file)
-    
-    load_dir = pgv.digest_job
-    print("loading previous digest from ", load_dir)
-    
-    load_json_files(pgc.digest_json, load_dir)
  
-
-# def statistics():
-#     print('Statistical analysis...')
-#     ps.statistics()
-     
-# def report():
-#     # Update_Global_Vars()
-#     print(" Generating final report...")
-#     fr.final_report()
-#     # printlog("Generating sequence mapping ")
-#     ma.mapping()
-      
-# def visualization():
-#     # Update_Global_Vars()
-#     print("Generating Visualization...")
-#     vi.visualization()
     
 # def CommandLineRun(args):
 #     Load_Global_Vars()
@@ -419,30 +329,6 @@ def LoadMatch():
 #     if "visualizationt" in args or "all" in args:
 #         visualization()
 #     sys.exit()
-
-#TODO update Loads to look for latest Job directory
-
-# def Load_Digest_Files():
-#     try:
-#         pgv.mol_dict = pgv.read_json(os.path.join(pgv.pytheas_data_folder, "mol.json"))
-#         pgv.mod_dict = pgv.read_json(os.path.join(pgv.pytheas_data_folder, "mod.json"))
-#         pgv.unique_frag_dict = pgv.read_json(os.path.join(pgv.pytheas_data_folder, "unique_frag.json"))
-#         pgv.frag_dict = pgv.read_json(os.path.join(pgv.pytheas_data_folder, "frag.json"))
-#         pgv.unique_precursor_dict = pgv.read_json(os.path.join(pgv.pytheas_data_folder, "unique_precursor.json"))
-#         pgv.precursor_dict = pgv.read_json(os.path.join(pgv.pytheas_data_folder, "precursor.json"))
-#     except:
-#         Error("Problem reading pytheas digest files", "Check " + pgv.pytheas_data_folder + " or re-run digest")
-        
-# def Load_Match_Files():
-#     try:       
-#         pgv.unpacked_match_dict = pgv.read_json(os.path.join(pgv.pytheas_data_folder, "unpacked_match.json"))
-#         pgv.ms2_match_dict = pgv.read_json(os.path.join(pgv.pytheas_data_folder, "ms2_match.json"))
-#         pgv.match_dict = pgv.read_json(os.path.join(pgv.pytheas_data_folder, "match.json"))
-#         pgv.top_match_dict = pgv.read_json(os.path.join(pgv.pytheas_data_folder, "top_match.json"))
-
-#         match_output_keys()
-#     except:
-#         Error("Problem reading pytheas match files", "Check " + pgv.pytheas_data_folder + " or re-run matching")
 
       
 # def Print_Match_Keys():
@@ -481,52 +367,46 @@ def LoadMatch():
 
 # valid_args = ['nogui', 'load_vars', 'screen_scale', 'all', 'in_silico_digest', 'matching', 'statistics', 'final_report', 'visualization']
 
-fixed_panels = ["input_files_dir", "input_files_req", "input_files_opt"] # fixed panels at top of layout
-
-option_dict = {}    # defines the widgets for each option panel
-for key, pdict in pgvdict.items():
-    if "option_group" in pdict:
-        group = pdict["option_group"]
-        if group not in option_dict.keys():
-            option_dict[group] = [] # preserves input order
-        option_dict[group].append(key)
-
-option_group_dict = {}   # defines the option groups for the master option widget
-for key, odict in pgvdict.items():
-    if "option_group" in odict:
-        wg = odict["widget_group"]
-        og = odict["option_group"]
-        if og in fixed_panels:
-            continue
-        if wg in option_group_dict.keys():
-            if og not in option_group_dict[wg]:
-                option_group_dict[wg].append(og)
-        else:
-            option_group_dict[wg] = [og]
-
-# standard files 
-    std_file_list = []
-    label_file_list = []
-    for w, wdict in pgvdict.items():
-        if "option_group" in wdict:
-            if pgvdict[w]["option_group"] == "input_files" and pgvdict[w]["widget_type"] != "PytheasLabel":
-                std_file_list.append(w)
-    # std_file_list = [w for w in pgvdict.keys() if pgvdict[w]["option_group"] == "input_files" and pgvdict[w]["widget_type"] != "PytheasLabel"]
-            if "rna_mod_defs" in w:
-                label_file_list.append(w)
-    # label_file_widgets = [w for w in master_widget_list if "rna_mod_defs" in w.pgv]
-    # std_file_widgets = std_file_widgets + label_file_widgets
-    std_file_list = std_file_list + label_file_list
-
-
 def build_Pytheas_gui():
-    print("INITIALIZING MAIN WINDOW")
     
+    # pgvdict has all of the info for building the GUI
+    
+    fixed_panels = ["input_files_dir", "input_files_req", "input_files_opt"] # fixed panels at top of layout
+
+    option_dict = {}    # defines the widgets for each option panel, key = group
+    option_group_dict = {}   # defines the option groups for the master option panel  key = widget group
+    std_file_list = [] # files to be read on startup
+    label_file_list = [] # heavy/light files
+
+    for key, pdict in pgvdict.items(): # extract info for each panel
+
+        if "option_group" in pdict:
+            og = pdict["option_group"]
+            wg = pdict["widget_group"]
+            if og not in option_dict.keys():
+                option_dict[og] = [] # preserves input order
+            option_dict[og].append(key)
+
+            if pgvdict[key]["option_group"] == "input_files" and pgvdict[key]["widget_type"] != "PytheasLabel":
+                std_file_list.append(key)
+            if "rna_mod_defs" in key:   # label files have to be read last
+                label_file_list.append(key)
+            
+            if og in fixed_panels:
+                continue
+            if wg in option_group_dict.keys():
+                if og not in option_group_dict[wg]:
+                    option_group_dict[wg].append(og)
+            else:
+                option_group_dict[wg] = [og]
+                
+    pgv.std_file_list = std_file_list + label_file_list # label has to be read last
+    
+    print("INITIALIZING MAIN WINDOW")
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
     main_window = QWidget()
     main_window.setWindowTitle("Pytheas 2.0")
-    
     
     # screen_geo = QDesktopWidget().screenGeometry()
     # widget_geo = main_window.geometry()
@@ -544,6 +424,7 @@ def build_Pytheas_gui():
     floating_windows = True
     
     #   build all panel widgets
+    
     option_panel_list, fixed_panel_list = [], []
     for group, glist in option_dict.items():
         
@@ -554,42 +435,20 @@ def build_Pytheas_gui():
         else:
             panel = PytheasFixedPanel(group, glist)
             fixed_panel_list.append(panel)
-            # panel.show_panel()
-            # print("panel geo", group, panel.geometry())
+            main_window_layout.addWidget(panel)
             
-    #   Assemble GUI layout
-    
-    # add file panels at top
-    # print("adding panels")
-    # print()
-    # print("***** IGNORE QT WARNINGS *****")
-    for panel in fixed_panel_list:
-    #     print("panel ", panel.group)
-         main_window_layout.addWidget(panel)
-    # print("***** END BOGUS QT WARNINGS *****")
-    # print()
-    
-    
-        # add module buttons
+    # add module buttons
     
     button_dict = {"Global Variables:": {"Load Global Variables": Load_Global_Vars,
                                          "Load Previous Globals": Load_Previous_Globals,
                                          "List Global Variables": Print_Global_Vars,
                                          "Save Global Variables": Save_Global_Variables                                     
                                           },
-                   # "Load Previous Files:": {"Load Digest Files": Load_Digest_Files,
-                   #                          "Load Match Files": Load_Match_Files,
-                   #                          "Print match_dict keys": Print_Match_Keys
-                   #                          },
                    "Pytheas Modules: ": {"In Silico Digest": inSilicoDigest,
                                          "Match Spectra": matchSpectra, 
-                                         # "Setup: Read Std Files": SetUp,
-                                         # "Discovery": Discovery,
+                                          # "Discovery": Discovery,
                                          # "Dev": Development,
                                          "Quit": Quit
-                                         # "Statistics": statistics, 
-                                         # "Final Report": report,
-                                         # "Visualization": visualization
                                          },
                    "Load Pytheas Files": {"Load Previous Digest": LoadDigest,
                                           "Load Previous Match and Digest": LoadMatch}
@@ -603,7 +462,6 @@ def build_Pytheas_gui():
     
     option_panel_dict = {panel.group: panel for panel in option_panel_list}
     option_panel = PytheasOptionPanel(option_group_dict, option_panel_dict, floating_windows)    # option panel widget
-    
     main_window_layout.addWidget(option_panel)
     
     if not floating_windows:    # turn this off to get floating windows
@@ -615,15 +473,7 @@ def build_Pytheas_gui():
     
     pgv.widget_dict = {w.pgv: w for w in master_widget_list}   # for save/load global variables use
     
-    # read standard definition files
-    std_file_widgets = [w for w in master_widget_list if w.option_group == "input_files" and w.widget_type != "PytheasLabel"]
-    label_file_widgets = [w for w in master_widget_list if "rna_mod_defs" in w.pgv]
-    std_file_widgets = std_file_widgets + label_file_widgets
-
     return main_window, app
-# pgv.pytheas_data_folder = os.path.join(pgv.working_dir,"pytheas_data_files")  # folder for json outputs
-# if not os.path.isdir(pgv.pytheas_data_folder):
-#     os.makedirs(pgv.pytheas_data_folder)
 
 # screen_geo = QDesktopWidget().screenGeometry()
 # print("Screen geo", screen_geo)
@@ -640,7 +490,7 @@ def build_Pytheas_gui():
 
 # if clargs.load_vars:
 #     Load_Global_Vars()
-print("Pytheas ready to Go!")
+# print("Pytheas ready to Go!")
 # if get_ipython().__class__.__name__ == 'SpyderShell':
 
 #     print("This program is running inside Spyder") 
@@ -656,16 +506,6 @@ main_window, app = build_Pytheas_gui()
 main_window.show()
 app.exec()
 
-# CL setup and run   
-
-# pgv.pytheas_root = '/Users/jrwill/prog/pytheas_tk_interface/pytheas_root'
-# # pgv.working_dir = '/Users/jrwill/prog/pytheas_tk_interface/pytheas_root/../Met_tRNA'
-# # pgv.working_dir = '/Users/jrwill/prog/pytheas_tk_interface/pytheas_root/../Example_data'
-# Load_Global_Vars()
-
-# pgv.plot_sequence_map = 'y'
-# inSilicoDigest()
-# matchSpectra()
 
 
 

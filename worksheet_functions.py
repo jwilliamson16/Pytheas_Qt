@@ -6,6 +6,13 @@ Created on Thu Mar 28 13:40:23 2024
 @author: jrwill
 """
 
+import os
+import pandas as pd
+import xlsxwriter
+
+from pytheas_global_vars import pgv
+
+
 def format_worksheet_columns(worksheet, df, fd):
     max_col_length = 100
     for col in df:   # set column widths
@@ -44,3 +51,35 @@ def write_worksheet_rows(worksheet, df, fd, bold):
                     worksheet.write(rowidx, colidx, row[1][col])
                 colidx +=1
             rowidx +=1
+            
+def write_parameter_worksheet(par_df, ppar_file):          
+
+#TODO move this to worksheet functions
+    workbook = xlsxwriter.Workbook(ppar_file,{"nan_inf_to_errors": True})
+    worksheet = workbook.add_worksheet(pgv.job_dir.split("/")[-1])
+    
+    bold = workbook.add_format()
+    bold.set_bold()
+    worksheet.set_column(0,0,25)
+    worksheet.set_column(1,1,100)
+    
+    # format_worksheet_columns(worksheet, par_df, fd)   # sets the column widths
+
+    for col in par_df.columns:  # output header
+        worksheet.write(0, par_df.columns.get_loc(col), col, bold)  # fd has user-defined label column if desired
+    
+    # write out each cell
+    rowidx = 1
+    for row in par_df.iterrows():
+        colidx = 0
+        for col in row[1].keys():
+            if type(row[1][col]) == list:
+                row[1][col] = ",".join(row[1][col])
+            worksheet.write(rowidx, colidx, row[1][col])
+            colidx +=1
+        rowidx +=1
+
+    # worksheet.show_gridlines = True
+    
+    workbook.close()
+
