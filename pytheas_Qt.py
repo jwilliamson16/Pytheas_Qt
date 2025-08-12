@@ -141,6 +141,7 @@ def Load_Previous_Globals(): # button function
 
 def Save_Global_Variables(): # button function
     path_list = [pgv.pytheas_parameters_save]
+    print("save file", path_list)
     Save_Globals_File(path_list)
 
 def Print_Global_Vars(): # button function

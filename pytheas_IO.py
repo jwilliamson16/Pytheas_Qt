@@ -31,7 +31,7 @@ def read_pytheas_file(file):
             print("read ", infile)
             return error
     
-    error = [" unable to open file!", "please find file: "  + base]
+    error = [" unable to open file!", "please find file: "  + infile]
     return error
 
     
@@ -128,6 +128,17 @@ def read_enzyme_def_file(file):
     pgv.enzyme_dict = enzyme_df.set_index("name").to_dict('index')
     
     for valdict in pgv.enzyme_dict.values(): # split elements into lists
+        valdict["pattern"] = parse_enzyme_pattern(valdict["pattern"])
+        valdict["end_3"] = valdict["end_3"].split(",")
+        valdict["end_5"] = valdict["end_5"].split(",")
+        valdict["cut_idx"] = int(valdict["cut_idx"])
+
+def read_custom_cleavage(file):
+    cleavage_sheet_dict = pd.read_excel(file,None)
+    cleavage_df = cleavage_sheet_dict["enzymes"]
+    pgv.custom_cleavage_dict = cleavage_df.set_index("name").to_dict('index')
+    
+    for valdict in pgv.custom_cleavage_dict.values(): # split elements into lists
         valdict["pattern"] = parse_enzyme_pattern(valdict["pattern"])
         valdict["end_3"] = valdict["end_3"].split(",")
         valdict["end_5"] = valdict["end_5"].split(",")

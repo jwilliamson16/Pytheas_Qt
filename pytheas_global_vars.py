@@ -21,6 +21,7 @@ class PGV:  # create namespace for pytheas global variables to be imported as pg
         # pytheas_root = os.path.split(os.path.dirname(__file__))[0] # directory for pytheas.py
         pytheas_root = os.path.dirname(__file__)
         pytheas_dir = os.path.join(pytheas_root, "pytheas_data")
+        print("pytheas_dir", pytheas_dir)
         working_dir = os.getcwd()
         # #TODO don't override pytheas_dir when loading parameters -- allow sharing of parameter files
         # #TODO eliminate user directory -- needlessly complex

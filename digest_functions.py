@@ -180,7 +180,7 @@ def unique_fragment(mol, end5, seq3, end3, fr, to, length, miss, ufdict, frag_se
     f3 = fragment_sequence(frag3) # object with 1-letter/3-letter seqs and ends
     full_mod_count = count_mods(frag3)
     
-    partial_key = mol + ":" + str(fr + 1) + "_" + str(to) + ":" + f3.frag
+    partial_key = mol + ":" + str(fr + 1) + "_" + str(to-1) + ":" + f3.frag
     partial = 0
     if pgv.partial_mods == 'y':
         frag3_list = []
@@ -204,7 +204,7 @@ def unique_fragment(mol, end5, seq3, end3, fr, to, length, miss, ufdict, frag_se
         else:
             frac_mod = round(partial_mod_count/full_mod_count, 2)
     
-        frag_seq_key = ":".join([mol, "_".join([str(fr+1), str(to)]), f3.frag])
+        frag_seq_key = ":".join([mol, "_".join([str(fr+1), str(to-1)]), f3.frag])
         ufdict[frag_seq_key] = {"mol": mol, "frag3": frag3}
         ufdict[frag_seq_key].update({"fr": fr, "to": to, "length": length, "miss": miss, 
                                      "partial_mod": frac_mod, "partial_key": partial_key})
@@ -242,58 +242,30 @@ def generate_cut_list(seq3, enzyme):
 
     return cut_list
 
-    # print(pattern, cut_idx, end_5, end_3)
-
-    # matches = sorted([i 
-    #                   for patt in pattern 
-    #                   for i in range(len(seq3)) 
-    #                   if seq3[i:i+len(patt)] == patt])     
+def generate_custom_cut_list(seq3, mol, ufdict, frag_seq_key_list):
     
-
+    #TODO check for sensible range with missed cleavages
+    cut_list = []
+    length = len(seq3)
+    last = length + 1
     
-    # pattern = [["ADE", "URI","URI"]]
-            # print(patt, i, seq3[i:i + len(patt)], patt == seq3[i:i + len(patt)])
-        # if seq3[i:i+len(patt)] == patt])     
-
-    
-    # print(seq3, "matches: ", match_index_list)
-    
-    
-    
-    #matches have index 0 to n-1
-
-#TODO  need to properly deal with 3' fragment from cleavage
-
-    
-    # step thru cut_index_list 
-    # cut_list = []
-    # miss = 0
-    # for i in range(len(cut_index_list) - 1):
-    #     print(i, cut_index_list[i], cut_index_list[i+1])
-    #     cut_list.append([cut_index_list[i], cut_index_list[i+1], miss])
+    for key, cd in pgv.custom_cleavage_dict.items():
+        pattern, cut_idx, end_5, end_3 = [cd[key] for key in ["pattern", "cut_idx", "end_5", "end_3"]]
         
+        match_index_list = []
+        for patt in pattern :
+            for i in range(len(seq3)):
+                if  patt == seq3[i:i + len(patt)]:
+                    match_index_list.append(i)
+                    
+        cut_index_list = [0] + [m + cut_idx for m in match_index_list] + [last] # add cut offset from match
 
-    # # fr, to = [0], [last]
-    # fr, to = [], []
-    # nmatches = len(matches)
-    # if nmatches == 0: # return full sequence
-    #     cut_list = [[0,last, 0]]
-    #     misses = 0
-    # else:
-    #     for i in range(nmatches):
-    #         if i == 0:
-    #             fr.append(0)
-    #         else:
-    #             fr.append(matches[i-1] + cut_idx)
-    #         to.append(matches[i] + cut_idx)
-    #         print("cutting", i, fr, to)
-    #     if matches[-1] < length - 1 and nmatches >= 1:
-    #         fr.append(matches[-1] + cut_idx)
-    #         to.append(last)
-    
-    # cut_list = [[fr[i],to[i+miss], miss] for miss in range(misses+1) for i in range(nmatches - miss)]
-    # if [0, last, 0] not in cut_list:
-    #     cut_list = [[0,last,0]] + cut_list
+        misses = min(pgv.miss, len(cut_index_list)-2) # of matches - 2 ends
+        cut_list = [[cut_index_list[i], cut_index_list[i+miss + 1], miss] # loop thru cut_index_list for each miss 
+                    for miss in range(misses+1) 
+                    for i in range(len(cut_index_list) - miss - 1)]
+        
+        process_cut_list(seq3, cut_list, mol, ufdict, frag_seq_key_list)
 
 def generate_random_cut_list(seq3):
     
@@ -310,11 +282,36 @@ def generate_random_cut_list(seq3):
                     
     return cut_list
 
+def process_cut_list(seq3, cut_list, mol, ufdict, frag_seq_key_list):
+
+     for fr,to,miss in cut_list:     
+       if fr == 0:
+           end5_list = pgv.mol_end5
+       else:
+           end5_list = pgv.frag_end5
+       if pgv.use_iTRAQ == 'y':
+           end3_list = ['tag']
+       else:
+           if to == len(seq3) + 1:
+               end3_list = pgv.mol_end3
+           else:
+               end3_list = pgv.frag_end3
+       
+       for end5 in end5_list:
+          for end3 in end3_list:
+               if end3 == "tag":
+                   s3 = seq3[fr:to] + ["CTG"]
+               else:
+                   s3 = seq3[fr:to]
+               
+               length = len(s3)
+               if pgv.min_length <= length <= pgv.max_length:
+                   print(mol, end5, end3, fr, to, length, miss)
+                   unique_fragment(mol, end5, seq3, end3, fr, to, length, miss, ufdict, frag_seq_key_list)
+
 
 def digest_sequence(mol, mdict, ufdict, enzyme): # process one sequence # digest
      
- #TODO implement nonspecific 
-
      seq3 = mdict["seq3"]
      frag_seq_key_list = []
      miss = 0
@@ -334,40 +331,16 @@ def digest_sequence(mol, mdict, ufdict, enzyme): # process one sequence # digest
      elif enzyme == "nonspecific":
         cut_list = generate_random_cut_list(seq3)
         
+     elif enzyme == "custom":
+        read_pytheas_file("custom_cleavage_file")
+        generate_custom_cut_list(seq3, mol, ufdict, frag_seq_key_list)
+        return frag_seq_key_list
+        
      else:        
-         # seq3 = mdict["seq3"]
-         cut_list = generate_cut_list(seq3, enzyme)
+          cut_list = generate_cut_list(seq3, enzyme)
          
-     print("cut_list", cut_list)
-          
-     for fr,to,miss in cut_list:
-       print("digest_sequence: ", fr, to, miss)
-       
-       if fr == 0:
-           end5_list = pgv.mol_end5
-       else:
-           end5_list = pgv.frag_end5
-       if pgv.use_iTRAQ == 'y':
-           end3_list = ['tag']
-       else:
-           if to == len(seq3) + 1:
-               end3_list = pgv.mol_end3
-           else:
-               end3_list = pgv.frag_end3
-       
-       for end5 in end5_list:
-          for end3 in end3_list:
-               if end3 == "tag":
-                   s3 = seq3[fr:to] + ["CTG"]
-                   # to += 1
-               else:
-                   s3 = seq3[fr:to]
-               
-               length = len(s3)
-               if pgv.min_length <= length <= pgv.max_length:
-                   print(mol, end5, end3, fr, to, length, miss)
-                   unique_fragment(mol, end5, seq3, end3, fr, to, length, miss, ufdict, frag_seq_key_list)
-    
+     process_cut_list(seq3, cut_list, mol, ufdict, frag_seq_key_list)
+         
      return frag_seq_key_list
 
 def add_precursor_ions(frag_dict, z_limit): # zlimit is specific z or "all" to take from charge tables # digest

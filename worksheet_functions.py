@@ -54,10 +54,11 @@ def write_worksheet_rows(worksheet, df, fd, bold):
             
 def write_parameter_worksheet(par_df, ppar_file):          
 
-#TODO move this to worksheet functions
+    print("write_parameter_worksheet", ppar_file)
     workbook = xlsxwriter.Workbook(ppar_file,{"nan_inf_to_errors": True})
-    worksheet = workbook.add_worksheet(pgv.job_dir.split("/")[-1])
-    
+    # worksheet = workbook.add_worksheet(pgv.job_dir.split("/")[-1])
+    worksheet = workbook.add_worksheet(ppar_file.split("/")[-1])
+
     bold = workbook.add_format()
     bold.set_bold()
     worksheet.set_column(0,0,25)

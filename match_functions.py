@@ -764,6 +764,10 @@ def make_sequence_plot(output_file):
             col_fr, col_to = map(int,r.split("_"))
             seq3_idx = 0
             for col_idx in range(col_fr - 1, col_to):
+                # print(seq3, len(seq3) + 1, col_idx, seq3_idx)
+                if seq3_idx >= len(seq3):
+                    # print("fragment too long", seq3, mol_str)
+                    break
                 color_matrix[row_idx, col_idx] = sequence_color(n_matches, seq3[seq3_idx])
                 seq3_idx += 1
 
