@@ -119,7 +119,7 @@ def read_topo_def_file(file): # from discovery_functions.py
 
 
 def parse_enzyme_pattern(pattern): # return list of lists to iterate over
-    pattern_list = [s.replace("]","").split("'") for s in pattern.replace(" ","").replace('[','').split('],')]
+    pattern_list = [s.replace("]","").split(",") for s in pattern.replace(" ","").replace('[','').split('],')]
     return pattern_list
 
 def read_enzyme_def_file(file):

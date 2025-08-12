@@ -16,7 +16,10 @@ import pandas as pd
 class PGV:  # create namespace for pytheas global variables to be imported as pgv
     def __init__(self):
 
-        pytheas_root = os.path.split(os.path.dirname(__file__))[0] # directory for pytheas.py
+        # print("pytheas_root",  os.path.split(os.path.dirname(__file__)))
+        # print(os.path.dirname(__file__))
+        # pytheas_root = os.path.split(os.path.dirname(__file__))[0] # directory for pytheas.py
+        pytheas_root = os.path.dirname(__file__)
         pytheas_dir = os.path.join(pytheas_root, "pytheas_data")
         working_dir = os.getcwd()
         # #TODO don't override pytheas_dir when loading parameters -- allow sharing of parameter files
