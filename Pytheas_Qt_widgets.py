@@ -312,11 +312,13 @@ class PytheasPanel(QWidget): # Floating panel for options
 
         self.widget_list = []
         for p in pgv_list:
+            # print("PytheasPanel", p)
             pwidget = pgvdict[p]["widget_type"]
+            # print("widget_type", pwidget)
             if pwidget == "PytheasLabel":
                 self.setWindowTitle(pgvdict[p]["widget_text"])
                 continue
-            
+            # print(pgvdict[p])
             w = globals()[pwidget](pgvd=pgvdict[p])
             self.frame_layout.addWidget(w)
             self.widget_list.append(w)

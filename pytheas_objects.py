@@ -9,30 +9,45 @@ Created on Mon Nov 11 10:05:36 2024
 
 import math
 import numpy as np
+import pandas as pd
 
 from pytheas_global_vars import pgv, pgc
 
+# class nt_fragment: # class for nucleotide group fragments
+#     def __init__(self, base, df, label):
+#         df_dict = df.to_dict(orient = "index")
+#         self.base = base
+#         self.label = label
+#         self.atom_names = df.iloc[:,0].tolist()   # don't need to keep
+#         self.atom_symbols = df.iloc[:,1].tolist()  # don't need to keep
+#         self.atom_stois = df.iloc[:,2].tolist()
+#         self.atom_groups = df.iloc[:,3].tolist() # don't need to keep
+#         glist = []
+#         for g in self.atom_groups:
+#             if g not in glist:
+#                 glist.append(g)
+#         self.groups = glist
+#         self.group_dict = {g:[] for g in self.groups}
+#         self.mass_dict = {}
+#         for g,s,stoi in zip(self.atom_groups,self.atom_symbols, self.atom_stois):
+#               if g not in self.mass_dict.keys():
+#                 self.mass_dict[g] = stoi * pgv.atomic_dict[s]["am"]
+#               else:
+#                 self.mass_dict[g] += stoi * pgv.atomic_dict[s]["am"]
+#         self.mass = sum(self.mass_dict.values())
+        
 class nt_fragment: # class for nucleotide group fragments
-    def __init__(self, base, df, label):
-        self.base = base
-        self.label = label
-        self.atom_names = df.iloc[:,0].tolist()   # don't need to keep
-        self.atom_symbols = df.iloc[:,1].tolist()  # don't need to keep
-        self.atom_stois = df.iloc[:,2].tolist()
-        self.atom_groups = df.iloc[:,3].tolist() # don't need to keep
-        glist = []
-        for g in self.atom_groups:
-            if g not in glist:
-                glist.append(g)
-        self.groups = glist
-        self.group_dict = {g:[] for g in self.groups}
-        self.mass_dict = {}
-        for g,s,stoi in zip(self.atom_groups,self.atom_symbols, self.atom_stois):
-              if g not in self.mass_dict.keys():
-                self.mass_dict[g] = stoi * pgv.atomic_dict[s]["am"]
-              else:
-                self.mass_dict[g] += stoi * pgv.atomic_dict[s]["am"]
-        self.mass = sum(self.mass_dict.values())
+     def __init__(self, base, df, label):
+         self.base = base
+         self.label = label
+         atom_symbols = df["Atom_symbol"] # don't need to keep
+         atom_stois = df["N_atoms"]
+         atom_groups = df["Atom_group"] # don't need to keep
+         self.groups = list(atom_groups.unique())
+         self.mass_dict = {g:0.0 for g in self.groups}
+         for g,s,stoi in zip(atom_groups, atom_symbols, atom_stois):
+                 self.mass_dict[g] += stoi * pgv.atomic_dict[s]["am"]
+         self.mass = sum(self.mass_dict.values())
  
 class MS2_spectrum:
     def __init__(self, mz1, rt, z, mzarray, intarray):  # is mz1 needed???
@@ -223,5 +238,17 @@ class fragment_sequence: # class to hold various sequence representations of a f
         self.modseq = "".join(mod_seq_list)
         
     
+class molecule:
+    def __init__(self, mdict):
+        for key, value in mdict.items():
+            setattr(self, key, value)
         
-        
+class atom:
+    def __init__(self, adict):
+        for key, value in adict.items():
+            setattr(self, key, value)
+            
+class residue:
+    def __init__(self, nt_dict):
+        for key, value in nt_dict.items():
+            setattr(self, key, value)

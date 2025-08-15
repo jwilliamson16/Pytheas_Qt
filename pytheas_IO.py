@@ -12,16 +12,19 @@ from Bio import SeqIO
 # from iteration_utilities import duplicates
 from pyteomics import mgf,mzml
 import pandas as pd
+import pickle
 
 from pytheas_global_vars import pgv, pgc, pgvdict
-from pytheas_objects import nt_fragment, MS2_spectrum
+from pytheas_objects import nt_fragment, MS2_spectrum, molecule, atom, residue
+from Pytheas_Qt_widgets import PytheasPanel
 
 def read_pytheas_file(file):
     error = None
     base = getattr(pgv, file)
-
+    print("working_dir", pgv.working_dir)
     for parent_dir in [pgv.working_dir, pgv.user_dir, pgv.pytheas_dir]:
         infile = os.path.join(parent_dir, base)
+        print(infile)
         if not os.path.isfile(infile):
             continue
         else:
@@ -39,6 +42,7 @@ def read_atomic_mass_file(file):
     with open(file,'r') as jfile:
         pgv.atomic_dict = json.load(jfile)
     pgv.hmass = pgv.atomic_dict["H1"]["am"]
+    # pgv.atomic_mass_dict = {key: atom(adict) for key, adict in pgv.atomic_dict.items()}
 
 """
 Masses from:
@@ -67,6 +71,8 @@ def read_nt_def_file(file):
             pgv.end_dict[row.Type][row.Pytheas_ID] = row.AMBER_3_letter_code
     
     pgv.nt_def_dict = nt_def_df.set_index('AMBER_3_letter_code').to_dict(orient="index")   # has all nucleotide names/mods and atom stoichiometries
+    
+    pgv.residue_dict = {key: residue(nt_dict) for key, nt_dict in pgv.nt_def_dict.items()}
 
 def read_nt_mod_def_file(file):
     try:
@@ -103,10 +109,10 @@ def read_topo_def_file(file): # from discovery_functions.py
     pgv.topo_dict = topo_df.set_index('group').to_dict('index')
     
     patch_df = topo_sheet_dict["patch_topology"]
-    pgv.patch_dict = patch_df.set_index('added_edge').to_dict('index')
+    pgv.patch_dict = patch_df.set_index('added_edge').to_dict('index') # not used??
 
     child_df = topo_sheet_dict["child_topology"]
-    pgv.child_dict = child_df.set_index('group').to_dict('index')
+    pgv.child_dict = child_df.set_index('group').to_dict('index') # not used??
  
     losses_df = topo_sheet_dict["secondary_losses"]
     pgv.losses_dict = losses_df.set_index('fragment').to_dict('index')
@@ -150,6 +156,30 @@ def read_charge_file(file):
                 for l,z in zip(chg_df.Length, chg_df.Charges)} 
                 for chg, chg_df in chg_sheet_dict.items()}
 
+# def read_modification_sets(pgvname, setfile):
+    
+#TODO  read this at startup to avoid rebuilding the panel
+def read_modification_sets(file):
+    # global set_dict
+    # print("initial mod set", modification_set)
+    set_sheet_dict = pd.read_excel(file, None)
+    set_df = set_sheet_dict["modification_sets"]
+    pgv.set_dict = {"natural": ["ADE", "CYT", "GUA", "URI"]}
+    sets = [set_name for set_name in set_df.columns if "set" in set_name]
+    print("sets in df: ", sets)
+    for set_name in sets:
+        # pgv.set_dict[set_name] = [base for base in list(set_df[set_name]) if str(base) != 'nan' and base in pgv.nt_key_dict]
+        pgv.set_dict[set_name] = [base for base in list(set_df[set_name]) if str(base) != 'nan']
+        print("   set name ", set_name, pgv.set_dict[set_name])
+    # set_widget = pgv.widget_dict["modification_set"]  #noqa
+    # cb_set = [cb.text() for cb in set_widget.cb_list]
+    # pgvdict["modification_set"]["option_list"] = sets
+    sets = pgv.set_dict.keys()
+    pgvdict["modification_set"]["option_list"] = ",".join(sets)
+    # pgv.option_panel_dict["Modifications"] = PytheasPanel("Modifications", pgv.option_dict["Modifications"])
+    print("read_modification_set: pgv.set_dict", pgv.set_dict)
+
+
 def write_json(j_dict, j_file):
     j = json.dumps(j_dict, indent=4)
     with open(j_file, 'w') as f:
@@ -183,6 +213,10 @@ def read_fasta_file(fasta_file): # digest
                 "mods": {}}
         else:
             print("Duplicate sequence ID: ", seq_id)
+            
+    pgv.molecule_dict = {key: molecule(mdict) for key, mdict in pgv.mol_dict.items()}
+    pickle.dump(pgv.molecule_dict, open(os.path.join(pgv.job_dir, "molecule_dict.pkl"), "wb" ))
+
      
 def read_mod_file(mod_file):
     pgv.mod_dict = pd.read_excel(mod_file).to_dict("index")

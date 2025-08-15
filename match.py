@@ -26,11 +26,17 @@ def match():
  
     t1 = datetime.now()
 
+    print()
+    print("STEP 1:  READ MS DATA")
     read_pytheas_file("MS_data_file")  # read in MS data to pgv.ms2_dict
     pgv.n_ms2_keys = len(list(pgv.ms2_dict.keys()))
 
+    print()
+    print("STEP 2:  MATCH SPECTRA")
     pgv.ms2_match_dict = match_spectra() # primary matching
-        
+    
+    print()
+    print("STEP 3:  GENERATE CONSOLIDATED MATCH REPORT")
     pgv.unpacked_match_dict, pgv.top_match_dict = unpack_match_dict(pgv.ms2_match_dict)  # unpack ms2_key level to make flat dict with one entry per match
  
     if pgv.use_iTRAQ == 'y':
@@ -45,6 +51,8 @@ def match():
 #TODO which of these are needed...        
     top_match_dict, pgv.seq_match_dict, pgv.match_dict = consolidated_match_output("consolidated_match_output" + match_job)
  
+    print()
+    print("STEP 4: GENERATE SEQUENCE MAP AND PLOT SPECTRA")
     if pgv.run == "CL":
         pgv.widget_dict["consolidated_match_output"].load_value("consolidated_match" + match_job + ".xlsx")
 

@@ -46,6 +46,23 @@ def matching(ms2_ctr, ms2_key):
         print("z = 0 for ms2_key, skipping... ", ms2_key, z)
         z = 1
 
+#TODO check for faster matching
+
+# import bisect
+
+#     sorted_list = [5, 8, 10, 15, 20, 25]
+#     lower_bound = 7
+#     upper_bound = 18
+
+#     # Find the insertion point for the lower bound
+#     left_index = bisect.bisect_left(sorted_list, lower_bound)
+
+#     # Find the insertion point for the upper bound
+#     right_index = bisect.bisect_right(sorted_list, upper_bound)
+
+#     elements_in_range = sorted_list[left_index:right_index]
+#     print(elements_in_range)
+
     precursor_list = [pkey for pkey in pgv.unique_precursor_dict.keys() 
                  for t in pgv.precursor_isotopologue_list 
                  if abs(pgv.unique_precursor_dict[pkey]["mz1"] + float(t) * pgc.neutron_mass/z - mz1) < tol 
@@ -87,7 +104,7 @@ def match_score_rank(ms2_key, updkey_list): # unique_precursor_dict...list of ke
     return top_sequences, prec_dict
 
 def build_ion_series(m0, frag3, label):
-     G = generate_molecular_graph(frag3, label)
+     G = generate_molecular_graph(frag3, label) # did this during digest... store in dict??
      ms2_ions = generate_ms2_ions(G, m0, label, frag3)     
      ms2_ions_sorted = dict(sorted(ms2_ions.items(), key=lambda item: item[1]["mz2"]))
      return ms2_ions_sorted

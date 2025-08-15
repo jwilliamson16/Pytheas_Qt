@@ -10,7 +10,7 @@ import os
 import copy
 from random import shuffle
 import xlsxwriter
-
+import pickle
 
 import networkx as nx
 import pandas as pd
@@ -112,11 +112,15 @@ def add_modifications(): # parse raw fasta seq and add modifications
 
     # generate seq3 from raw_seq
     for seq_id, sdict in pgv.mol_dict.items():
+        mol = pgv.molecule_dict[seq_id]
         if pgv.rna_mods != 'fasta':  # none, modfile, or 1-letter 
             # print(seq_id, sdict.keys())
             sdict["seq3"] = parse_1_letter(sdict["raw_seq"])
+            mol.seq3 = parse_1_letter(mol.raw_seq)
         else:
             sdict["seq3"] = parse_mod_seq(sdict["raw_seq"])  # parse mods in brackets from fasta
+            mol.seq3 = parse_mod_seq(mol.seq3)
+    pickle.dump(pgv.molecule_dict, open(os.path.join(pgv.job_dir, "molecule_2+dict.pkl"), "wb" ))
             
     if pgv.rna_mods == 'modfile':  # read modifications in from mod def file
     
@@ -139,8 +143,10 @@ def add_modifications(): # parse raw fasta seq and add modifications
                 else:
                      pgv.mol_dict[mk]["seq3"][mp - 1] = base3   # need to substitute mod into seq_list
  
+    # mod_dict primarily used in match sequence plotting
     active_mods = []
     pgv.mod_dict = {}
+    
     midx = 0
     for seq_id, sdict, in pgv.mol_dict.items():
         print("seq_id", seq_id, sdict["seq3"])
@@ -306,7 +312,7 @@ def process_cut_list(seq3, cut_list, mol, ufdict, frag_seq_key_list):
                
                length = len(s3)
                if pgv.min_length <= length <= pgv.max_length:
-                   print(mol, end5, end3, fr, to, length, miss)
+                   # print(mol, end5, end3, fr, to, length, miss)
                    unique_fragment(mol, end5, seq3, end3, fr, to, length, miss, ufdict, frag_seq_key_list)
 
 
@@ -376,6 +382,7 @@ def generate_molecular_graph(f3, label): # new toplogy
         nd = G.nodes[node]
         res =nd["resno"]
         base = nd["base"]
+        # print("generate_molecular_graph", res, base,nd["group"])
         nd.update(pgv.child_dict[nd["group"]]) # add topology info
         parent_group, child_group = nd["added_edge"].split("_")
         child_res = res + nd["child_offset"]
@@ -489,7 +496,7 @@ def build_precursor_dict():   # expand frag_dict by z and label for complete lis
 
     return unique_precursor_dict
 
-def output_digest_file(output_file): 
+def output_digest_file(output_file): # move to worksheet functions
     
     digest_df = pd.DataFrame.from_dict(pgv.unique_precursor_dict, orient="index").reset_index()
     

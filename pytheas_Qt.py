@@ -36,6 +36,7 @@ from Pytheas_Qt_widgets import (PytheasRadioButtonBar, PytheasCheckBoxBar, Pythe
                                                 PytheasLabel, PytheasPanel, PytheasFixedPanel, 
                                                 PytheasOptionPanel, PytheasButton, PytheasButtonPanel)
 from worksheet_functions import write_parameter_worksheet
+from discovery import discovery
 
 
 class Logger(object):
@@ -283,19 +284,20 @@ def matchSpectra(): # main pytheas module
     print("Done with Matching MS2 spectra")
     logger.close()
 
-# def Discovery():
-#     print("Sequencing fragments by discovery")
+def Discovery():
+    logger, next_dir = setup_job_dir("Discovery")
+    print("Sequencing fragments by discovery")
 
-#     error = read_standard_files()
-#     if error != None:
-#         return
+    error = read_standard_files()
+    if error != None:
+        return
 
-#     print("initial mod set", pgv.modification_set)
-#     dis.discovery()
-#     print("after discovery", pgv.modification_set)
-#     SaveRunParameters("discovery")
-#     print("after timestamp", pgv.modification_set)
-#     print("Done with Discovery")
+    print("initial mod set", pgv.modification_set)
+    discovery()
+    print("after discovery", pgv.modification_set)
+    SaveRunParameters("discovery", next_dir)
+    print("after timestamp", pgv.modification_set)
+    print("Done with Discovery")
 
 # def SetUp():
 #     print("Reading standard files ")
@@ -374,7 +376,7 @@ def build_Pytheas_gui():
     
     fixed_panels = ["input_files_dir", "input_files_req", "input_files_opt"] # fixed panels at top of layout
 
-    option_dict = {}    # defines the widgets for each option panel, key = group
+    pgv.option_dict = {}    # defines the widgets for each option panel, key = group
     option_group_dict = {}   # defines the option groups for the master option panel  key = widget group
     std_file_list = [] # files to be read on startup
     label_file_list = [] # heavy/light files
@@ -384,9 +386,9 @@ def build_Pytheas_gui():
         if "option_group" in pdict:
             og = pdict["option_group"]
             wg = pdict["widget_group"]
-            if og not in option_dict.keys():
-                option_dict[og] = [] # preserves input order
-            option_dict[og].append(key)
+            if og not in pgv.option_dict.keys():
+                pgv.option_dict[og] = [] # preserves input order
+            pgv.option_dict[og].append(key)
 
             if pgvdict[key]["option_group"] == "input_files" and pgvdict[key]["widget_type"] != "PytheasLabel":
                 std_file_list.append(key)
@@ -427,7 +429,7 @@ def build_Pytheas_gui():
     #   build all panel widgets
     
     option_panel_list, fixed_panel_list = [], []
-    for group, glist in option_dict.items():
+    for group, glist in pgv.option_dict.items():
         
         if group not in fixed_panels:
             panel = PytheasPanel(group, glist)
@@ -447,7 +449,7 @@ def build_Pytheas_gui():
                                           },
                    "Pytheas Modules: ": {"In Silico Digest": inSilicoDigest,
                                          "Match Spectra": matchSpectra, 
-                                          # "Discovery": Discovery,
+                                         "Discovery": Discovery,
                                          # "Dev": Development,
                                          "Quit": Quit
                                          },
@@ -461,8 +463,8 @@ def build_Pytheas_gui():
     
     # add master option panel
     
-    option_panel_dict = {panel.group: panel for panel in option_panel_list}
-    option_panel = PytheasOptionPanel(option_group_dict, option_panel_dict, floating_windows)    # option panel widget
+    pgv.option_panel_dict = {panel.group: panel for panel in option_panel_list}
+    option_panel = PytheasOptionPanel(option_group_dict, pgv.option_panel_dict, floating_windows)    # option panel widget
     main_window_layout.addWidget(option_panel)
     
     if not floating_windows:    # turn this off to get floating windows
