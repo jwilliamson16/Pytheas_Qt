@@ -286,6 +286,7 @@ def matchSpectra(): # main pytheas module
 
 def Discovery():
     logger, next_dir = setup_job_dir("Discovery")
+    pgv.discovery_job = next_dir
     print("Sequencing fragments by discovery")
 
     error = read_standard_files()

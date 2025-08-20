@@ -43,13 +43,13 @@ def match():
         iTRAQ_quantitation() # adds iTRAQ to unpacked dict
 
     match_job = "_" + pgv.match_job.split("_")[-1]
-    output_match_dict_file("match_output" + match_job)  # output the complete matching report
+    output_match_dict_file(pgv.unpacked_match_dict, "match_output" + match_job)  # output the complete matching report
     if pgv.run == "CL":
         pgv.widget_dict["match_output"].load_value("match_output" + match_job + ".xlsx")
     match_output_keys(pgv.unpacked_match_dict) # makes list of match_dict keys to print out....for convenience
 
 #TODO which of these are needed...        
-    top_match_dict, pgv.seq_match_dict, pgv.match_dict = consolidated_match_output("consolidated_match_output" + match_job)
+    top_match_dict, pgv.seq_match_dict, pgv.match_dict = consolidated_match_output(pgv.unpacked_match_dict, "consolidated_match_output" + match_job)
  
     print()
     print("STEP 4: GENERATE SEQUENCE MAP AND PLOT SPECTRA")

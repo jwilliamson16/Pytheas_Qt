@@ -6,10 +6,11 @@ Created on Wed Jul 24 14:18:29 2024
 @author: jrwill
 """
 
-from itertools import permutations, combinations, product
+# from itertools import permutations, combinations, product
 
 from pytheas_global_vars import pgv, pgc
 from pytheas_objects import fragment_sequence
+from digest_functions import generate_mod_seq
 from scoring_functions import ppm_range, ppm_offset
 from match_functions import scoring, rank_matches
 # import digest_functions as dg
@@ -25,7 +26,7 @@ import numpy as np
 import xlsxwriter
 import copy
 import pandas as pd
-# from pytheas_modules.setup import CID_series, CID_5end, CID_3end, score_keys, output_keys, stats_keys
+
 import os
 from datetime import datetime
 from collections import Counter
@@ -33,53 +34,6 @@ import statsmodels.api as sm # recommended import according to the docs
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 
-# class fragment_sequence: # class to hold various sequence representations of a fragment
-#     #convention:
-#         # frag3 is 3-letter code including end groups as list:  primary internal representation
-#         # seq3  is 3-letter code without end groups as list
-#         # frag is 1-letter code with brackets for mods, an terminal groups as prefix_ _suffix for output
-#         # seq is 1-letter code with brackets for mods, no terminal groups for output
-#         # end5n is 3-letter code for 5'end
-#         # end5 is 1-letter code for 5'end
-#         # end3n is 3-letter code for 3'end
-#         # end3 is 1-letter code for 3'end
-       
-#     def __init__(self,frag3):
-#         self.frag3 = frag3
-#         mod_seq_list = []
-#         fr = 0
-#         to = len(self.frag3)
-#         self.end5n, self.end5 = "", ""
-#         prefix, suffix = "", ""
-#         self.end3n, self.end3 = "", ""
-
-#         for base in self.frag3:
-#             base_id = pgv.nt_def_dict[base]["Pytheas_ID"]
-#             base_type = pgv.nt_def_dict[base]["Type"]
-#             if base == "XXX":
-#                 mod_seq_list.append('X')
-#             elif base_type == "natural":
-#                 mod_seq_list.append(base_id)
-#             else:
-#                 if type(base_id)  == float or base_id =="":
-#                     mod_seq_list.append("[" + base + "]")
-#                 else:
-#                     mod_seq_list.append("[" + base_id + "]")
-                    
-#             if base_type == "end5":
-#                 self.end5n = base
-#                 self.end5 = base_id
-#                 prefix = self.end5 + "_"
-#                 fr = 1
-#             if base_type == "end3":
-#                 self.end3n = base
-#                 self.end3 = base_id
-#                 suffix = "_" + self.end3
-#                 to = len(self.frag3) -1
-        
-#         self.seq3 = frag3[fr:to]
-#         self.seq= "".join(mod_seq_list[fr:to])
-#         self.frag = prefix + self.seq + suffix
 
 class Combination_Sum:
     def __init__(self, candidates, target, tol):
@@ -179,7 +133,7 @@ class Combination_Product:
             if i > 7:
                 msum = sum([len(m) for m in current_dict["matches"]])/i
                 if msum < pgv.matching_cutoff:
-                    print("hitting eject", i,msum, pgv.matching_cutoff, current_dict["current_factors"])
+                    # print("hitting eject", i,msum, pgv.matching_cutoff, current_dict["current_factors"])
                     return
         self.ctr +=1
     
@@ -248,30 +202,6 @@ class Combination_Product:
         return self.complete_list, self.ctr, self.bctr, self.nctr
 
 
-
-
-# def read_topo_def_file_new(pgv_name, file):
-#     global topo_dict, patch_dict, losses_dict, child_dict
-#     topo_sheet_dict = pd.read_excel(file, None)
-#     topo_df = topo_sheet_dict["normal_topology"]
-#     topo_dict = topo_df.set_index('group').to_dict('index')
-    
-#     patch_df = topo_sheet_dict["patch_topology"]
-#     patch_dict = patch_df.set_index('added_edge').to_dict('index')
-
-#     child_df = topo_sheet_dict["child_topology"]
-#     child_dict = child_df.set_index('group').to_dict('index')
-
-    
-#     losses_df = topo_sheet_dict["secondary_losses"]
-#     losses_dict = losses_df.set_index('fragment').to_dict('index')
-#     for loss,ldict in losses_dict.items():
-#         if ldict["loss_mass_list"] == "none":
-#             ldict["loss_mass"] = 0
-#         else:
-#             atom_list = ldict["loss_mass_list"].split(",")
-#             ldict["loss_mass"] = sum([pgv.atomic_dict[a]["am"]for a in atom_list])
-
 def find_closest_index(a, x): # a is sorted low to hi   NOT NEEDED?
     i = bisect.bisect_left(a, x)
     if i >= len(a):
@@ -280,7 +210,17 @@ def find_closest_index(a, x): # a is sorted low to hi   NOT NEEDED?
         i = i - 1
     return (i, a[i])
 
-def build_mass_dict(mass_dict, base_list):
+def build_mass_dict():
+# def build_mass_dict(mass_dict, base_list):
+   
+    print("discovery: modification_set", pgv.modification_set, type(pgv.modification_set))
+    base_list = [b for s in  pgv.modification_set for b in pgv.set_dict[s] ]
+    print("mod list", base_list)
+    
+    # #TODO    # need to loop thru labels
+    mass_dict = {key:val.mass for key,val in pgv.nt_fragment_dict["light"].items() if "end" not in pgv.nt_def_dict[key]["Type"]}
+
+    
     sub_mass_dict = {base:mass for base, mass in mass_dict.items() if base in base_list}
 
     tol = .01
@@ -291,53 +231,30 @@ def build_mass_dict(mass_dict, base_list):
             if abs(mi - mj) < tol:
                 print(bi,bj, abs(mi-mj))
             
-    iso_mass_list = sorted(list(set([round(m,3) for b,m in sub_mass_dict.items()]))   )       
-    iso_mass_dict = {m:[] for m in iso_mass_list}
+    pgv.iso_mass_list = sorted(list(set([round(m,3) for b,m in sub_mass_dict.items()]))   )       
+    pgv.iso_mass_dict = {m:[] for m in pgv.iso_mass_list}
 
     for bi,mi in sub_mass_dict.items():
         mkey = round(mi,3)
-        if mkey in iso_mass_dict.keys():
-            iso_mass_dict[mkey].append(bi)
+        if mkey in pgv.iso_mass_dict.keys():
+            pgv.iso_mass_dict[mkey].append(bi)
     
-    mod_mass_list = []
-    for key, blist in iso_mass_dict.items():
+    pgv.mod_mass_list = []
+    for key, blist in pgv.iso_mass_dict.items():
         for b in blist:
             print(key, b)
             if b in pgc.natural:
                 break
-            if key not in mod_mass_list:
+            if key not in pgv.mod_mass_list:
                 print("addin", key)
-                mod_mass_list.append(key)
+                pgv.mod_mass_list.append(key)
 
-    return iso_mass_dict, iso_mass_list, mod_mass_list
 
-# def depth_first_search(i, current, total, candidates, target, results, tol):   # recursive algorithm for combination sum
-#     # i is pointer index, current is current sequence, total is sum of current, candidates is list of masses, 
-#     # target is mz1, results is list of masses that sum to target within tolerance tol (pgv.MS1_ppm)
-#     global ctr, bctr  # counts total number of calls during recursion
-#     ctr +=1
-#     count = sum([1 for b in current if b in pgv.mod_mass_list]) # bail if too many mods in candidates
-#     if count > pgv.max_mods:
-#         bctr += 1
-#         return
-#     if abs(total - target) < tol:
-#         results.append(current.copy())
-#         return
-#     if i >= len(candidates) or total > target:
-#         return
-    
-#     current.append(candidates[i])
-#     depth_first_search(i,current, total + candidates[i], candidates, target, results, tol)
-#     current.pop()
-#     depth_first_search(i+1, current, total, candidates, target, results, tol)
+    print("iso_mass_dict", pgv.iso_mass_dict)
+    print("iso_mass_list", pgv.iso_mass_list)
+    print("mod_mass_list", pgv.mod_mass_list)
 
-# def combination_sum(candidates, target, tol):
-#     global ctr, bctr
-#     ctr = 0
-#     bctr = 0
-#     results = []       
-#     depth_first_search(0, [], 0, candidates, target, results, tol)
-#     return results, ctr, bctr
+    # return iso_mass_dict, iso_mass_list, mod_mass_list
 
 def expand_seq_dfs(i, current, candidates, sequences):   # recursive algorithm for expanding combinations of sequences
     # i is pointer index, current is current sequence, candidates is list of nucleotides, sequences has results
@@ -420,9 +337,8 @@ def generate_molecular_graph(f3, label):   # same as digest_functions
     return G
 
 
-def build_node_list(f3, label): #build list of lists for nodes  # maybe osolete
+def build_node_list(f3, label): #build list of lists for nodes  ## NOT NEEDED??
 
-    
     base_list, base_node_list, base_factors_list = [], [], []
     
     G = generate_molecular_graph(f3, label)
@@ -493,7 +409,7 @@ def calculate_mz1(G, label, z):
     for node in G.nodes:
         base = G.nodes[node]["base"]
         grp = G.nodes[node]["group"]
-        m0 += pgv.nt_fragment_dict[label][base].mass_dict[grp] # this is a bit wasteful
+        m0 += pgv.nt_fragment_dict[label][base].mass_dict[grp] 
    
     if pgv.ion_mode == "-":  
         zsign = -1
@@ -512,7 +428,7 @@ def simple_product(vals):
     return p
 
 def next_node(G, mtot, node, z2_list, m0, length): # not needed, but keep to incorporate into digest/match
-    global nctr
+    # global nctr
     nd = G.nodes[node] # node dict 
     # base = nd["base"]
     # grp = nd["group"]
@@ -555,106 +471,9 @@ def next_node(G, mtot, node, z2_list, m0, length): # not needed, but keep to inc
                     mz2 = (mr - pgv.losses_dict['z-P']["loss_mass"] + zs * pgv.hmass)/abs(zs)
                     cid_ions.append({"mz2": mz2, "intensity": 1.0, "series": 'z-P', "index": right, "z": zs})
 
-    nctr += 1
+    # nctr += 1
     return mtot, cid_ions
 
-# def matching_ms2_dfs(cid_ions):  #cid ions is a list of ion dicts
-#     global candidate_factors, prime_multiple, node_list_list, z2_list, m0,  ms2_vals, ms2_ints
-
-#     # n_ms2_keys = len(ms2_vals)
-#     matches = []
-
-#     for cid in cid_ions:
-#         mz2 = cid["mz2"]
-#         ppmo = ppm_range(mz2, pgv.MS2_ppm_offset)
-#         ppm = ppm_range(mz2 + ppmo , pgv.MS2_ppm) 
-#         lower = mz2 + ppmo - ppm
-#         upper = mz2 + ppmo + ppm
-#         idxlo = max(bisect.bisect_left(ms2_vals,lower) - 2,0)
-#         idxhi = min( bisect.bisect_left(ms2_vals,upper) + 2, len(ms2_vals))
-        
-#         for idx in range(idxlo,idxhi):  # check for ppm tolerance
-#             match_mass = ms2_vals[idx]
-#             match_int = ms2_ints[idx]
-#             calc_offset = ppm_offset(mz2, match_mass)
-#             if abs(calc_offset) < pgv.MS2_ppm:
-#                 matches.append({"theo_mz2": mz2,"theo_int": cid["intensity"], "series": cid["series"], 
-#                                     "index": cid["index"], "z": cid["z"], "obs_mz2": match_mass, "obs_int": match_int, 
-#                                     "ppmo": calc_offset})
-#     return matches
-
-
-
-# def dfs_product_ms2(i, current_dict, complete_list): 
-#     global G, candidate_factors, prime_multiple, node_list_list, z2_list, m0,  ms2_vals, ms2_ints, length
-#     # globals:
-#     #   candidate_factors = target composition of sequence given as prime factors
-#     #   prime_multiple = target product of candidate_factors
-#     #   node_node_list = list of all possible node values for each node in the sequence graph
-#     #   z2_list = list of allowed charge states for MS2_ions
-#     #   m0 = monoisotopic mass of target
-#     #   ms2_vals = sorted_list of experimentl mz2 values for matching
-#     #   ms2_intensities = sorted list of experimental intensities
-#     # locals
-#     # i is current pointer
-#     # current_dict:
-#     #       current_factors = current list of prime factors for each 
-#     #       ms2_ions = current list of ms2_ions up to current node
-#     #       m_list = current list of cumulative masses up to current node
-#     #       matches = current list of matches thru current node
-#     # complete_dict
-#     #   factors_list = current list of prime factors for completed sequences
-#     #   ms2_ions_list = current list of ms2_ions for completed sequences
-#     #   matched_ion_list - current list of matched_ions for completed sequences
-    
-#     global ctr, bctr  # counts total number of calls during recursion
-    
-#     # check termination:  if done, append sequences, if infeasible return, otherwise continue
-#     prod = simple_product(current_dict["current_factors"])
-#     if prod == prime_multiple and len(current_dict["current_factors"]) == len(candidate_factors): # solution!
-#         complete_list.append(copy.deepcopy(current_dict))
-#         return
-        
-#     if (prime_multiple/simple_product(current_dict["current_factors"]))%1 != 0.0 and len(current_dict["current_factors"]) != 0:  # terminating by not a factor
-#         return
-    
-#     # check progress of matching
-#     if pgv.check_dfs_matching == 'y':
-#         if i > 7:
-#             msum = sum([len(m) for m in current_dict["matches"]])/i
-#             if msum < pgv.matching_cutoff:
-#                 # print("hitting eject", i, current_dict["current_factors"])
-#                 return
-#     ctr +=1
-
-#     for j in range(len(candidate_factors[i])):
-#         # add candidate_node
-#         current_dict["current_factors"].append(candidate_factors[i][j])
-#         mtot, cid_ions = next_node(G, current_dict["m_list"][i], node_list_list[i][j], z2_list, m0, length)
-#         matched_ions = matching_ms2_dfs(cid_ions)
-#         current_dict["ms2_ions"].append(cid_ions)
-#         current_dict["m_list"].append(mtot)
-#         current_dict["matches"].append(matched_ions)
-
-#         #recursion...next node
-#         dfs_product_ms2(i+1, current_dict, complete_list)
-#         # reset to try next candidate at position i
-#         current_dict["current_factors"].pop()
-#         current_dict["ms2_ions"].pop()
-#         current_dict["m_list"].pop()
-#         current_dict["matches"].pop()    
-
-# def combination_product():
-#     global ctr, bctr, nctr
-#     global candidate_factors, prime_multiple, node_list_list, m0, ms2_vals, ms2_ints, length
-
-#     nctr, ctr, bctr  = 0, 0, 0
-#     current_dict = {"current_factors": [], "ms2_ions": [], "m_list": [0], "matches": []}
-#     complete_list = []
-
-#     dfs_product_ms2(0, current_dict, complete_list)
-    
-#     return complete_list, ctr, bctr, nctr
 
 def repack_current_factors(factors_list, base_list, base_factor_list):
     seq = []
@@ -664,19 +483,7 @@ def repack_current_factors(factors_list, base_list, base_factor_list):
         seq.append(base_list[base_factor_list.index(f)])
         
     return seq
- 
-# def unpack_current_factors(node_list):
-#     seq = []
-#     for node in node_list:
-#         b, i, g = node.split("_")
-#         if g == "B":
-#             seq.append(b)
-    
-#     first = node_list[0]
-#     last = node_list[-1]
-    
-#     return first, seq, last
- 
+  
 def repack_ion_list(ms2_ions_list):
     ilist = []
     idict = {}
@@ -786,14 +593,14 @@ def rank_score_plot(sp, score, file):
     ax.set_xlabel(score, **hfont)
     ax.set_ylabel(score + ' rank/N', **hfont)
     ax.legend(loc="upper right")
-    ms2_key, seq, _, _ = os.path.basename(file).split("_")
+    ms2_key, seq, _, _, _ = os.path.basename(file).split("_")
     fig.suptitle("ms2_key = " + ms2_key + " " + seq +  " N = " + str(len(sp)) + " delta = " + str(round(delta,3)) + " p(e) = "  + str(round(pe,3)), **hfont)
     plt.savefig(file)
     plt.close(fig)
 
 
 def match_permutations_dfs(f3, ms2_key, label):
-    global G, node_list_list, candidate_factors, prime_multiple, m0, ms2_vals, ms2_ints, length, z2_list
+    # global G, node_list_list, candidate_factors, prime_multiple, m0, ms2_vals, ms2_ints, length, z2_list
     #node_list_list and candidate_factors are trees
     #prime_multiple and m0 are precursor proprties
     #ms2_vals and ms2_ints are spectrum properties
@@ -801,7 +608,6 @@ def match_permutations_dfs(f3, ms2_key, label):
     
     node_dict = build_node_dict(f3, label)
  
-     
     spec = pgv.ms2_dict[ms2_key]
     ms2_vals = [mz2 for mz2, intensity in spec.ms2.items()]
     ms2_ints = [intensity for mz2, intensity in spec.ms2.items()]
@@ -874,7 +680,7 @@ def match_permutations_dfs(f3, ms2_key, label):
 
     print("ion generation and matching took ", datetime.now() - t2)
 
-    t3 = datetime.now()
+    # t3 = datetime.now()
     top = score_rank_discovery_dfs(ms2_key, precursor_dict) # top = [key, frag, Sp, rank]
     # print("scor + rank took ", datetime.now() - t3)
     top_sort = sorted(top, key=lambda x: x[2], reverse = True)
@@ -886,12 +692,16 @@ def match_permutations_dfs(f3, ms2_key, label):
     else:
         top_match = "none"
 
-    # if pgv.Sp_stats_plots == 'y':
-    #     sp_list = [precursor_dict[key]['Sp'] for key in precursor_dict.keys()]
-    #     spfile = str(ms2_key) + "_" + f3.seq + "_Sp_plot.pdf"
-    #     score_distribution_plot(sp_list, "Sp", pgv.working_dir + "/" + spfile)
-    #     rankfile = str(ms2_key) + "_" + f3.seq + "_rank_plot.pdf"
-    #     rank_score_plot(sp_list, "Sp", pgv.working_dir + "/" + rankfile)
+    if pgv.Sp_stats_plots == 'y':
+        sp_list = [precursor_dict[key]['Sp'] for key in precursor_dict.keys()]
+        if len(sp_list) != 0:
+            top_score = round(max(sp_list),2)
+        else:
+            top_score = 0.0
+        spfile = str(ms2_key) + "_" + f3.seq + "_" + str(top_score) + "_Sp_plot.pdf"
+        score_distribution_plot(sp_list, "Sp", pgv.plot_dir + "/" + spfile)
+        rankfile = str(ms2_key) + "_" + f3.seq + "_" + str(top_score) + "_rank_plot.pdf"
+        rank_score_plot(sp_list, "Sp", pgv.plot_dir + "/" + rankfile)
     
     nperms = number_permutations(f3.seq3)
 
@@ -918,6 +728,9 @@ def number_permutations(composition):
 
 
 def discover_spectra():
+    
+    build_mass_dict()
+    
     ms2_ctr = 0
     master_match_dict = {}
     for ms2_key, spec in pgv.ms2_dict.items():  # discover_spectra() return master_match_dict
@@ -948,7 +761,7 @@ def discover_spectra():
                 end5n = pgv.end_dict["end5"][end5]
                 end3n = pgv.end_dict["end3"][end3]
                 for label in pgv.isotopic_species:
-                    fdict = {}
+                    # fdict = {}
                     mobs_adj = mobs - (pgv.nt_fragment_dict[label][end5n].mass + pgv.nt_fragment_dict[label][end3n].mass)
         
                     seq_comps, ppm_tol, tol = find_compositions(mobs, mobs_adj) # need to add label 
@@ -986,7 +799,7 @@ def discover_spectra():
     
     return master_match_dict
    
-def unpack_master_match_dict(master_match_dict):
+def unpack_master_discovery_dict(master_match_dict):
     unpacked_dict = {}
     ukey = 0
     for ms2_key, mdict in master_match_dict.items(): 
@@ -1012,4 +825,64 @@ def evd_cdf(x,mu,sig):
     # formulas from Mathematica for extreme value distribution
     # evdpdf[mu_, sig_, x_] := Exp[(mu - x)/sig] Exp[-Exp[(mu - x)/sig]]/sig
     # evdcdf[mu_, sig_, x_] := Exp[-Exp[(mu - x)/sig]]
+
+
+def validate_discovery():
+    upm_df = pd.DataFrame.from_dict(pgv.unpacked_match_dict, orient = "index") # match output
+    dis_df = pd.DataFrame.from_dict(pgv.unpacked_discovery_dict, orient = "index") # discovery output
+
+    ms2_keys = list(set(list(upm_df["ms2_key"].unique()) + list(dis_df["ms2_key"].unique())))
+
+    n_matches = 0
+    n_sub_matches = 0
+
+    for key in ms2_keys:
+        m_df = upm_df[upm_df["ms2_key"] == key]
+        d_df = dis_df[dis_df["ms2_key"] == key]
+        
+        if len(d_df) != 0:
+            d_top = d_df.iloc[0]
+            d_seq = generate_mod_seq(d_top["frag3"])
+         
+        if len(m_df) != 0:
+            m_top = m_df.iloc[0]
+            m_seq = generate_mod_seq(m_top["frag3"])
+
+        if len(d_df) == 0:
+            print("ms2_key ", key, "no discovery", "match = ", m_seq)
+            continue
+        
+        if len(m_df) == 0:
+            print("ms_key ", key, "no match", "discovery = ", d_seq)
+            continue
+        
+        
+        if m_seq == d_seq:
+            print("ms2_key", key, "match = discovery", m_seq)
+            n_matches += 1
+        else:
+            print("ms2_key", key, "match != discovery ", m_seq, d_seq)
+            ctr = 0
+            for idx, row in d_df.iterrows():
+                d_seq = generate_mod_seq(row["frag3"])
+                ctr += 1
+                if d_seq == m_seq:
+                    print("found match at row ", ctr)
+                    n_sub_matches += 1
+                    
+
+    print()
+    print("total matches = ", n_matches)
+    print("suboptimal matches ", n_sub_matches)
+          
+
+# def get_validated_target(ms2_key):
+#     if ms2_key in pgv.valid_dict.keys():
+#         target =  pgv.valid_dict[ms2_key]["frag"]
+#         end3, tseq, end5 = target.split("_")
+#         target3 = dg.parse_mod_seq(tseq)
+#     else:
+#         target = "I_unknown_am"
+#         target3 = ["IAM", "UNK", "KNO", "WN "]
+#     return target, target3
 

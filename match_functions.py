@@ -109,12 +109,19 @@ def build_ion_series(m0, frag3, label):
      ms2_ions_sorted = dict(sorted(ms2_ions.items(), key=lambda item: item[1]["mz2"]))
      return ms2_ions_sorted
 
-
-def next_node(G, mtot, node, z2_list, m0, length): # not needed, but keep to incorporate into digest/match
+#TODO reconcile with discovery next node
+def next_node(G, mtot, node, z2_list, m0, length): # slightly different than for discovery
     nd = G.nodes[node] # node dict 
     base = nd["base"]
     grp = nd["group"]
     mgrp = pgv.nt_fragment_dict["light"][base].mass_dict[grp]
+    # if "group_mass" not in nd:
+    #     print("no group_mass", nd)
+    #     mgrp_new = 0.0
+    # else:
+    #     mgrp_new = nd["group_mass"]
+    #     # if mgrp != mgrp_new:
+    #     #     print(node, base, grp, mgrp, mgrp_new)
     mtot += mgrp
     cid_ions = []
     fl = nd["fragment_left"]
@@ -384,9 +391,9 @@ def rank_matches(prec_dict, top_n):
     return ordered_dict
 
 
-def output_match_dict_file(output_file): 
+def output_match_dict_file(match_dict, output_file): 
               
-    formatted_dict = format_match_dict()
+    formatted_dict = format_match_dict(match_dict)
 
     flist = []
     for ukey, udict in formatted_dict.items():
@@ -474,10 +481,11 @@ def unpack_match_dict(ms2_match_dict):
  
     return unpacked_dict, top_match_dict
 
-def format_match_dict():   # entry from the unpacked dict...reformat for table output
+def format_match_dict(match_dict):   # entry from the unpacked dict...reformat for table output
 
     formatted_dict = {}
-    for midx, mdict in pgv.unpacked_match_dict.items(): # reformat lists and dicts in
+    # for midx, mdict in pgv.unpacked_match_dict.items(): # reformat lists and dicts in
+    for midx, mdict in match_dict.items(): # reformat lists and dicts in
 
         fdict = copy.deepcopy(mdict)
         f3 = fragment_sequence(fdict["frag3"]) # add various sequence representations
@@ -533,17 +541,17 @@ def match_output_keys(udict):
             pgv.match_dict_keys = list(udict[ukey].keys())
             break
 
-def consolidated_match_output(output_file):
+def consolidated_match_output(unpacked_match_dict, output_file):
 
     rank = pgv.ranking + "_rank"
     
     top_matches = []
-    for ukey, udict in pgv.unpacked_match_dict.items():
+    for ukey, udict in unpacked_match_dict.items():
         if rank in udict:
             if udict[rank] == 1:
                 top_matches.append(ukey)
     
-    print("total number of matches ", len(pgv.unpacked_match_dict.keys()))
+    print("total number of matches ", len(unpacked_match_dict.keys()))
     print("number of top matches ", len(top_matches))        
     
     dSp2_threshold = 0.1
@@ -553,12 +561,12 @@ def consolidated_match_output(output_file):
     # flag cases of poor discrimination
 
     for ukey in top_matches:
-        udict = pgv.unpacked_match_dict[ukey]
+        udict = unpacked_match_dict[ukey]
         top_match_dict[ukey] = udict
         ms2_key = udict["ms2_key"]
         udict["flags"] = []
         nmatches = 0
-        for key, val in pgv.unpacked_match_dict.items():
+        for key, val in unpacked_match_dict.items():
             if val["ms2_key"] == ms2_key:
                 nmatches += 1
  

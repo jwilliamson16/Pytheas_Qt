@@ -324,7 +324,7 @@ def digest_sequence(mol, mdict, ufdict, enzyme): # process one sequence # digest
 
      if enzyme == "none":
          fr = 0
-         to = len(seq3)
+         to = len(seq3) + 1
          length = len(seq3)
          end5_list = mdict["mol_5_end"]
          end3_list = mdict["mol_3_end"]
@@ -405,6 +405,10 @@ def generate_molecular_graph(f3, label): # new toplogy
             nd["child_node"] = child_node
         
         G.add_edge(parent_node, child_node)
+
+#TODO   reconcile with discovery and next_node    
+        # nd["group_mass"] = pgv.nt_fragment_dict["light"][G.nodes[node]["base"]].mass_dict[G.nodes[node]["group"]]
+        # print("generate_mol_graph: nd.keys()", nd.keys())
 
     return G
 

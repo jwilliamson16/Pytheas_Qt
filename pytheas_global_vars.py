@@ -91,6 +91,8 @@ class PGC: # class for global constants
         digest_json = ["mol", "mod", "unique_precursor",
                                                 "unique_frag", "frag"]
         match_json =  ["unpacked_match", "ms2_match", "match", "top_match"]
+        discovery_json = ["master_discovery", "unpacked_discovery", "discovery",
+                             "iso_mass"]
   
         # ms2_plot constants
         ion_series = ["ag", "Rep", "a","a-B","b","c","d","w","x","y","y-P","z","z-P"] # color is first match in list, default = black
