@@ -403,8 +403,10 @@ def build_Pytheas_gui():
                     option_group_dict[wg].append(og)
             else:
                 option_group_dict[wg] = [og]
-                
+    
+     
     pgv.std_file_list = std_file_list + label_file_list # label has to be read last
+    
     
     print("INITIALIZING MAIN WINDOW")
     app = QApplication(sys.argv)
@@ -495,20 +497,27 @@ def build_Pytheas_gui():
 # if clargs.load_vars:
 #     Load_Global_Vars()
 # print("Pytheas ready to Go!")
-# if get_ipython().__class__.__name__ == 'SpyderShell':
 
-#     print("This program is running inside Spyder") 
-#     pgv.run = "Spyder"
-# else:
-#     print("This program is running on command line")
-#     pgv.run = "CL"
-
-pgv.run = "CL"
-# if __name__ == "__main__":
-print("launching Pytheas app...")
 main_window, app = build_Pytheas_gui()
-main_window.show()
-app.exec()
+
+try:
+    run_mode = get_ipython().__class__.__name__
+except:
+    run_mode = "command_line"
+
+if run_mode == 'SpyderShell':
+
+    print("This program is running inside Spyder") 
+    pgv.run = "Spyder"
+    # build_Pytheas_gui()
+else:
+    print("This program is running on command line")
+    pgv.run = "CL"
+    # pgv.run = "CL"
+    # if __name__ == "__main__":
+    print("launching Pytheas app...")
+    main_window.show()
+    app.exec()
 
 
 

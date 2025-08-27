@@ -13,6 +13,7 @@ from pytheas_objects import fragment_sequence
 from digest_functions import generate_mod_seq
 from scoring_functions import ppm_range, ppm_offset
 from match_functions import scoring, rank_matches
+from pytheas_IO import save_pickle
 # import digest_functions as dg
 # import match_functions as ma
 # from pytheas_modules.Combination_sum_class_work import Combination_Sum
@@ -26,6 +27,9 @@ import numpy as np
 import xlsxwriter
 import copy
 import pandas as pd
+# import gc
+from pathlib import Path
+
 
 import os
 from datetime import datetime
@@ -34,6 +38,24 @@ import statsmodels.api as sm # recommended import according to the docs
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 
+class MS2_ion_match:
+    __slots__ = ("theo_mz2", "theo_int", "series", "index", "z", "obs_mz2", "obs_int", "ppmo")
+                   # matches.append({"theo_mz2": mz2,"theo_int": cid["intensity"], "series": cid["series"], 
+                   #                     "index": cid["index"], "z": cid["z"], "obs_mz2": match_mass, "obs_int": match_int, 
+                   #                     "ppmo": calc_offset})
+
+    def __init__(self, theo_mz2, theo_int, series, index, z, obs_mz2, obs_int, ppmo):
+        self.theo_mz2 = theo_mz2
+        self.theo_int = theo_int
+        self.series = series
+        self.index = index
+        self.z = z
+        self.obs_mz2 = obs_mz2
+        self.obs_int = obs_int
+        self.ppmo = ppmo
+        
+        # for key, val in ion_dict:
+        #     setattr(self, key, val)
 
 class Combination_Sum:
     def __init__(self, candidates, target, tol):
@@ -65,6 +87,8 @@ class Combination_Sum:
     def combination_sum(self):
         self.depth_first_search(0, [], 0)
         return self.results, self.ctr, self.bctr
+# %%
+
 
 class Combination_Product:
     def __init__(self, node_dict):
@@ -82,6 +106,7 @@ class Combination_Product:
         self.ctr = 0
         self.bctr = 0
         self.nctr = 0
+        self.ectr = 0
         self.complete_list = []
         # complete_dict
         #   factors_list = current list of prime factors for completed sequences
@@ -106,9 +131,10 @@ class Combination_Product:
                 match_int = self.ms2_ints[idx]
                 calc_offset = ppm_offset(mz2, match_mass)
                 if abs(calc_offset) < pgv.MS2_ppm:
-                    matches.append({"theo_mz2": mz2,"theo_int": cid["intensity"], "series": cid["series"], 
-                                        "index": cid["index"], "z": cid["z"], "obs_mz2": match_mass, "obs_int": match_int, 
-                                        "ppmo": calc_offset})
+                    matches.append(MS2_ion_match(mz2, cid["intensity"], cid["series"], cid["index"], cid["z"], match_mass, match_int, calc_offset))
+                    # matches.append({"theo_mz2": mz2,"theo_int": cid["intensity"], "series": cid["series"], 
+                    #                     "index": cid["index"], "z": cid["z"], "obs_mz2": match_mass, "obs_int": match_int, 
+                    #                     "ppmo": calc_offset})
         return matches
 
     def dfs_product_ms2(self, i, current_dict): 
@@ -120,25 +146,47 @@ class Combination_Product:
         #       matches = current list of matches thru current node
         
         # check termination:  if done, append sequences, if infeasible return, otherwise continue
-        prod = simple_product(current_dict["current_factors"])
-        if prod == self.prime_multiple and len(current_dict["current_factors"]) == len(self.candidate_factors): # solution!
+        # print()
+        # print(i )
+        cf = current_dict["current_factors"]
+        lcf = len(cf)
+        ncf = len([c for c in cf if c > 1])
+        prod = simple_product(cf)
+        if prod == self.prime_multiple and lcf == len(self.candidate_factors): # solution!
             self.complete_list.append(copy.deepcopy(current_dict))
+            # print("     ", "prime multiple_match")
             return
             
-        if (self.prime_multiple/simple_product(current_dict["current_factors"]))%1 != 0.0 and len(current_dict["current_factors"]) != 0:  # terminating by not a factor
+        if (self.prime_multiple/simple_product(cf)%1 != 0.0 and lcf) != 0:
+            self.bctr += 1# terminating by not a factor
+            # print("     ", "bad composition")
             return
         
         # check progress of matching
         if pgv.check_dfs_matching == 'y':
-            if i > 7:
-                msum = sum([len(m) for m in current_dict["matches"]])/i
-                if msum < pgv.matching_cutoff:
-                    # print("hitting eject", i,msum, pgv.matching_cutoff, current_dict["current_factors"])
+            # if i > 7:
+            #     msum = sum([len(m) for m in current_dict["matches"]])/i
+            #     if msum < pgv.matching_cutoff:
+            #         print("hitting eject", i,msum, pgv.matching_cutoff, current_dict["current_factors"])
+            #         return
+
+             if lcf > 5:
+                # print(current_dict["matches"])
+                n_matches = len([m for m in current_dict["matches"] if m != []])
+                if n_matches < pgv.match_intcpt +  pgv.match_slope * ncf:
+                    # n_matches = len([m for m in current_dict["matches"] if m != []])
+                    print("n_matches", i, n_matches, ncf, pgv.match_intcpt + pgv.match_slope * n_matches)
+                    print(" terminating poor match", i, ncf, n_matches)
+                    self.ectr += 1
                     return
+            
         self.ctr +=1
     
         for j in range(len(self.candidate_factors[i])):
-            # add candidate_node
+            # if len(self.candidate_factors[i]) > 1:
+            #        print(i,  sum([len(m) for m in current_dict["matches"]]), self.candidate_factors[i][j])
+            #        print(current_dict["current_factors"])
+            # # add candidate_node
             current_dict["current_factors"].append(self.candidate_factors[i][j])
             mtot, cid_ions = self.next_node(current_dict["m_list"][i], self.node_list_list[i][j])
             matched_ions = self.matching_ms2_dfs(cid_ions)
@@ -199,7 +247,9 @@ class Combination_Product:
     
         self.dfs_product_ms2(0, {"current_factors": [], "ms2_ions": [], "m_list": [0], "matches": []})
         
-        return self.complete_list, self.ctr, self.bctr, self.nctr
+        return self.complete_list, self.ctr, self.bctr, self.nctr, self.ectr
+
+# %%
 
 
 def find_closest_index(a, x): # a is sorted low to hi   NOT NEEDED?
@@ -483,8 +533,9 @@ def repack_current_factors(factors_list, base_list, base_factor_list):
         seq.append(base_list[base_factor_list.index(f)])
         
     return seq
-  
-def repack_ion_list(ms2_ions_list):
+
+#TODO redo with list comprehension
+def repack_ion_list(ms2_ions_list):  #
     ilist = []
     idict = {}
     idx = 0
@@ -497,16 +548,67 @@ def repack_ion_list(ms2_ions_list):
     return idict_sorted
 
 def repack_match_list(ms2_ions_list):
-    ilist = []
-    idict = {}
-    idx = 0
-    for i in ms2_ions_list:
-        ilist.extend(i)
-    for i in ilist:
-        idict[idx] = i
-        idx +=1
-    idict_sorted = dict(sorted(idict.items(), key=lambda item: item[1]["obs_mz2"]))
+    # ilist = []
+    # idict = {}
+    # idx = 0
+    # for i in ms2_ions_list:
+    #     ilist.extend(i)
+    # for i in ilist:
+    #     idict[idx] = i
+    #     idx +=1
+    # idict_sorted = dict(sorted(idict.items(), key=lambda item: item[1]["obs_mz2"]))
+    alist = ["theo_mz2", "theo_int", "series", "index", "z", "obs_mz2", "obs_int", "ppmo"]
+    ilist = [ion for ion_list in ms2_ions_list for ion in ion_list if ion_list != []]
+    idict = {idx:ilist[idx] for idx in range(len(ilist)) }
+    idict_ms2_sorted = dict(sorted(idict.items(), key=lambda item: item[1].obs_mz2))
+    idict_sorted = {}
+    for key, val in idict_ms2_sorted.items():
+        mdict = {a: getattr(val, a) for a in alist}
+        # print(key, mdict)
+        idict_sorted[key] = mdict
+        
+    
     return idict_sorted
+
+def score_discovery(ms2_key, prec_dict, ion_series): # Add the Sp score to the precursor ion matches
+#TODO  got rid of "all" option  fix!
+    if ion_series == ['all']:
+         ion_series_list = pgv.all_CID_series
+    else:
+        ion_series_list = ion_series
+    thresh = float(pgv.MS2_peak_threshold)
+    sumi_all, max_int = sumI_all(pgv.ms2_dict[ms2_key], thresh) # should this be the theo digest???? NO!
+
+    for key, precursor in prec_dict.items():
+        
+        # pdict = 
+        precursor["sumi"] = sumI(precursor["matched_ions"])
+        precursor["sumi_all"] = sumi_all
+        precursor["n"] = n_calc(precursor["matched_ions"], [], thresh)
+        precursor["L"] = L_calc(precursor["CID_ions"], [], thresh)
+        precursor["beta_list"] = [round(consecutive_series(precursor["matched_ions"],s),3) for s in ion_series_list]
+        precursor["beta"] = 1.0 + sum(precursor["beta_list"])
+#TODO put alpha in this eqn
+        precursor["alpha"] = pgv.alpha
+        if precursor["sumi_all"] == 0 or  precursor["L"] == 0:
+            calc_score = 0
+        else:
+            calc_score = precursor["sumi"] * precursor["n"] * precursor["beta"]/(precursor["sumi_all"] * precursor["L"])
+        precursor["Sp"] = calc_score
+        precursor["score_details"] = [":".join([sk, str(precursor[sk])]) for sk in pgv.score_keys]
+
+        precursor["max_int"] = max_int
+
+        # calculate Xcorr score
+        tspec = calc_theo_spectrum(precursor)
+        corr_fft = np.multiply(tspec, pgv.ms2_dict[ms2_key].ft)
+        corr_ift = np.fft.ifft(corr_fft)
+        corr = np.real(corr_ift)
+        corr = np.fft.fftshift(corr)
+        xcorr = max(corr)/np.mean(corr[pgc.np2 - pgv.xcorr_avg_width: pgc.np2 - pgv.xcorr_excl_width] + corr[pgc.np2 + pgv.xcorr_excl_width: pgc.np2 + pgv.xcorr_avg_width])
+        precursor["Xc"] = xcorr
+        precursor["Xc_sc"] = xcorr * pgv.xcorr_length_scale * precursor["length"]
+
 
 def score_rank_discovery_dfs(ms2_key, precursor_dict): # precursor_dict built from combos that match precursor mz1
     
@@ -599,7 +701,7 @@ def rank_score_plot(sp, score, file):
     plt.close(fig)
 
 
-def match_permutations_dfs(f3, ms2_key, label):
+def match_permutations_dfs(f3, ms2_key, label, cidx, n_comps):
     # global G, node_list_list, candidate_factors, prime_multiple, m0, ms2_vals, ms2_ints, length, z2_list
     #node_list_list and candidate_factors are trees
     #prime_multiple and m0 are precursor proprties
@@ -638,11 +740,16 @@ def match_permutations_dfs(f3, ms2_key, label):
     # complete_list, ctr, bctr, nctr = combination_product()
     # complete_list, ctr, bctr, nctr = Combination_Product(G, candidate_factors, prime_multiple, 
     #                         node_list_list, z2_list, m0,  ms2_vals, ms2_ints, length).combination_product()
-    complete_list, ctr, bctr, nctr = Combination_Product(node_dict).combination_product()
+    start = datetime.now()
+    complete_list, ctr, bctr, nctr, ectr = Combination_Product(node_dict).combination_product()
+    print("Combination_Product took", datetime.now() - start, "for ", len(complete_list), "matches")
     # complete_list, ctr, bctr, nctr = Combination_Sum_Match(node_dict).combination_product()
 
     
     print(" number of dfs evals = ", ctr)
+    print(" number of node evals = ", nctr)
+    print(" number of mod bails = ", bctr)
+    print("number of n_match bails = ", ectr)
 
     # precursor_dict = {}
     frag_seq_key_list = []
@@ -705,8 +812,9 @@ def match_permutations_dfs(f3, ms2_key, label):
     
     nperms = number_permutations(f3.seq3)
 
+    print()
     print("discovery dfs match for mz1 = ", round(spec.mz1,3), "nperms = ", nperms, "best match of ",len(top_sort), "matches is ", top_match)
-    print("composition ", f3.seq3, " took ", datetime.now() - t2)
+    print("composition ", cidx + 1, " of ", n_comps, f3.seq3, " took ", datetime.now() - t2)
        
     return precursor_dict, top_sort, top_keys, top_frags, top_match
 
@@ -732,11 +840,26 @@ def discover_spectra():
     build_mass_dict()
     
     ms2_ctr = 0
-    master_match_dict = {}
-    for ms2_key, spec in pgv.ms2_dict.items():  # discover_spectra() return master_match_dict
+    # master_match_dict = {}
+    ms2_file_list = []
+    
+    
+    # for ms2_key, spec in pgv.ms2_dict.items():  # discover_spectra() return master_match_dict
+    for ms2_key in pgv.ms2_key_list:  # discover_spectra() return master_match_dict
+        spec = pgv.ms2_dict[ms2_key]
         # if pgv.max_spectra != "all":
         #    if ms2_ctr > int(pgv.max_spectra):
         #        break
+        # save results for each ms2_separately
+        # garbage = gc.collect()
+        # print()
+        # print("**** garbage at ms2 key " ,ms2_key, " = ", garbage)
+        # print()
+        
+        
+        pgv.spec_dir = os.path.join(pgv.job_dir, "discovery_data_" + str(ms2_key))
+        pgv.plot_dir = pgv.spec_dir
+        Path(pgv.spec_dir).mkdir(parents=True, exist_ok=True)
 
         if ms2_ctr > 300:
             break
@@ -778,8 +901,8 @@ def discover_spectra():
   
                     for seq_comp in seq_comps:  # match_composition() function
                         nperms = number_permutations(seq_comp)
-                        if nperms > pgv.max_permutations:
-                        # if len(seq_comp) > 8:
+                        # if nperms > pgv.max_permutations:
+                        if len(seq_comp) > 5:
                             pgv.check_dfs_matching = 'y'
                             print()
                             print("using check_dfs on ms2_key ", ms2_key, " of length ", str(len(seq_comp)), "with", nperms, "permutations")
@@ -788,17 +911,61 @@ def discover_spectra():
                         else:
                             pgv.check_dfs_matching = 'n'
                         f3 = fragment_sequence([end5n] + seq_comp + [end3n])
-                        precursor_dict, top_sort, top_keys, top_frags, top_match = match_permutations_dfs(f3, ms2_key, label)
-                        master_composition_dict[cidx] = precursor_dict
+                        precursor_dict, top_sort, top_keys, top_frags, top_match = match_permutations_dfs(f3, ms2_key, label, cidx, len(seq_comps))
+                        unpacked_precursor_dict = prune_precursor_dict(precursor_dict)
+                        # need to unpack precursor_dict and truncate 
+                        # maybe do Sp histogram first
+                        master_composition_dict[cidx] = unpacked_precursor_dict
                         cidx += 1
-                        
+        
+        pickle_file = os.path.join(pgv.spec_dir, "discovery_" + str(ms2_key) + ".pkl")
+        ms2_file_list.append(pickle_file)
+        print("Saved: ", pickle_file)
+
+        save_pickle(master_composition_dict, pickle_file)
         print("spectrum ", ms2_key, " took ", datetime.now() - t1 )
         print("*******")
         print()
-        master_match_dict[ms2_key] = copy.deepcopy(master_composition_dict)
+        # master_match_dict[ms2_key] = copy.deepcopy(master_composition_dict)
+    # return master_match_dict
+    return ms2_file_list
+
+
+def prune_precursor_dict(precursor_dict):
+    pruned_dict = {}
+             
+    pkeys_sorted = sorted(list(precursor_dict.keys()), key = lambda x: precursor_dict[x]['Sp'], reverse = True)
     
-    return master_match_dict
-   
+    ntop = min(len(pkeys_sorted), pgv.ntop)
+    pruned_dict = {i:precursor_dict[pkeys_sorted[i]] for i in range(ntop)}
+
+    return pruned_dict
+
+def unpack_precursor_dict(precursor_dict):
+    unpacked_comp_dict = {}
+    ckey = 0
+    print("precursor_dict keys", precursor_dict.keys())
+    for cidx, cdict in precursor_dict.items(): # go thru each composition
+        print("cdict keys", cdict.keys())
+        # print("cdict", cdict)
+        for midx, match_dict in cdict.items(): # go thru each match
+            if len(match_dict) > 0:
+                print("match_dict", match_dict)
+                unpacked_comp_dict[ckey] = {"comp_index": cidx, "match_index": midx} # concatentate
+                unpacked_comp_dict[ckey].update(match_dict)
+                ckey += 1
+            else:
+                print("empty match_dict", cidx, midx)
+            
+    ckeys_sorted = sorted(list(unpacked_comp_dict.keys()), key = lambda x: unpacked_comp_dict[x]['Sp'], reverse = True)
+    
+    ntop = min(len(ckeys_sorted), pgv.ntop)
+    unpacked_precursor_dict = {i:unpacked_comp_dict[ckeys_sorted[i]] for i in range(ntop)}
+ 
+    return unpacked_precursor_dict
+    
+
+
 def unpack_master_discovery_dict(master_match_dict):
     unpacked_dict = {}
     ukey = 0

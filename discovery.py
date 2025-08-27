@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 from pytheas_global_vars import pgv, pgc
-from pytheas_IO import read_pytheas_file, save_json_files
+from pytheas_IO import read_pytheas_file, save_json_files, load_pickle
 
 from discovery_functions import (build_mass_dict, discover_spectra,
                                     unpack_master_discovery_dict, 
@@ -26,9 +26,9 @@ def discovery():
     pgv.n_ms2_keys = len(list(pgv.ms2_dict.keys()))
     print("number of spectra = ", pgv.n_ms2_keys)
 
-    if pgv.Sp_stats_plots == 'y':
-        pgv.plot_dir = os.path.join(pgv.job_dir, "Sp_plots")
-        Path(pgv.plot_dir).mkdir(parents=True, exist_ok=True)
+    # if pgv.Sp_stats_plots == 'y':
+    #     pgv.plot_dir = os.path.join(pgv.job_dir, "Sp_plots")
+    #     Path(pgv.plot_dir).mkdir(parents=True, exist_ok=True)
 
 # TODO... implement Xcorr?    
 #     # if pgv.Xcorr =='y':
@@ -54,10 +54,18 @@ def discovery():
     
     # pgv.master_precursor_dict = {}  # temporary dict to accumulate precursors and avoid recalculation ()  NOT USED??
         
-    pgv.master_discovery_dict = discover_spectra()
+    # pgv.discovery_dict = discover_spectra()
+    pgv.ms2_file_list = discover_spectra()
     
+    # midx = 0
+    pgv.discovery_dict = {}
+    for ms2_file in pgv.ms2_file_list:
+        ms2_key = int(ms2_file.split("/")[-1].split(".")[0].split("_")[-1])
+        pgv.discovery_dict[ms2_key] = load_pickle(ms2_file)
+        # midx += 1
+        
 #TODO make this unpacked_discovery_dict
-    pgv.unpacked_discovery_dict = unpack_master_discovery_dict(pgv.master_discovery_dict)
+    pgv.unpacked_discovery_dict = unpack_master_discovery_dict(pgv.discovery_dict)
     
     discovery_job = pgv.discovery_job.split("_")[-1]
     discovery_file = "discovery_output" + "_" + discovery_job

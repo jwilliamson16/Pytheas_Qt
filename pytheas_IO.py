@@ -360,5 +360,13 @@ def save_json_files(module, json_dir):
         jvar = getattr(pgv, jroot + "_dict")
         write_json(jvar, os.path.join(json_dir, jfile))
         
-        
+def save_pickle(obj, file_path):
+    print("obj", obj.keys(), file_path)
+    pickle.dump(obj, open(file_path, "wb" ))
+    print("Saved: ", file_path)
+
+def load_pickle(pickle_file):
+    obj = pickle.load(open(pickle_file, "rb"))
+    return obj
+      
         
