@@ -29,7 +29,7 @@ import copy
 import pandas as pd
 # import gc
 from pathlib import Path
-
+from copy import deepcopy
 
 import os
 from datetime import datetime
@@ -37,7 +37,10 @@ from collections import Counter
 import statsmodels.api as sm # recommended import according to the docs
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
+from collections import deque
 
+
+#TODO move to pytheas_objects
 class MS2_ion_match:
     __slots__ = ("theo_mz2", "theo_int", "series", "index", "z", "obs_mz2", "obs_int", "ppmo")
                    # matches.append({"theo_mz2": mz2,"theo_int": cid["intensity"], "series": cid["series"], 
@@ -87,7 +90,7 @@ class Combination_Sum:
     def combination_sum(self):
         self.depth_first_search(0, [], 0)
         return self.results, self.ctr, self.bctr
-# %%
+# %% Combination_Product
 
 
 class Combination_Product:
@@ -108,6 +111,8 @@ class Combination_Product:
         self.nctr = 0
         self.ectr = 0
         self.complete_list = []
+        self.parent_dict = {}
+        self.depth_score_dict = {}
         # complete_dict
         #   factors_list = current list of prime factors for completed sequences
         #   ms2_ions_list = current list of ms2_ions for completed sequences
@@ -137,7 +142,7 @@ class Combination_Product:
                     #                     "ppmo": calc_offset})
         return matches
 
-    def dfs_product_ms2(self, i, current_dict): 
+    def dfs_product_ms2(self, i, current_dict, parent): 
         # i is current pointer
         # current_dict:
         #       current_factors = current list of prime factors for each 
@@ -145,42 +150,72 @@ class Combination_Product:
         #       m_list = current list of cumulative masses up to current node
         #       matches = current list of matches thru current node
         
-        # check termination:  if done, append sequences, if infeasible return, otherwise continue
-        # print()
-        # print(i )
+        # self.parent = parent
         cf = current_dict["current_factors"]
         lcf = len(cf)
         ncf = len([c for c in cf if c > 1])
         prod = simple_product(cf)
+        
         if prod == self.prime_multiple and lcf == len(self.candidate_factors): # solution!
             self.complete_list.append(copy.deepcopy(current_dict))
             # print("     ", "prime multiple_match")
             return
+        
+        
             
         if (self.prime_multiple/simple_product(cf)%1 != 0.0 and lcf) != 0:
             self.bctr += 1# terminating by not a factor
             # print("     ", "bad composition")
             return
-        
-        # check progress of matching
-        if pgv.check_dfs_matching == 'y':
-            # if i > 7:
-            #     msum = sum([len(m) for m in current_dict["matches"]])/i
-            #     if msum < pgv.matching_cutoff:
-            #         print("hitting eject", i,msum, pgv.matching_cutoff, current_dict["current_factors"])
-            #         return
 
-             if lcf > 5:
-                # print(current_dict["matches"])
-                n_matches = len([m for m in current_dict["matches"] if m != []])
-                if n_matches < pgv.match_intcpt +  pgv.match_slope * ncf:
-                    # n_matches = len([m for m in current_dict["matches"] if m != []])
-                    print("n_matches", i, n_matches, ncf, pgv.match_intcpt + pgv.match_slope * n_matches)
-                    print(" terminating poor match", i, ncf, n_matches)
-                    self.ectr += 1
-                    return
+# either track score by depth, or do breadth first search
+
+        # print()
+        # print("current_dict_matches")
+        # for m in current_dict["matches"]:
+        #     for ml in m:
+        #         print(ml)
             
-        self.ctr +=1
+        # print(current_dict["matches"])
+        n_matches = len([m for ml in current_dict["matches"] for m in ml if m != []])
+        score = pgv.match_intcpt + pgv.match_slope * n_matches
+        
+        if len(current_dict["current_factors"]) > 0: # branch point
+            factor = current_dict["current_factors"][-1]
+            # if lcf in self.depth_score_dict:
+            #     if score < 0.5 * self.depth_score_dict[lcf]:
+            #         # pass
+            #         return
+            #     if score > self.depth_score_dict[lcf]:
+            #         self.depth_score_dict[lcf] = score
+            # else:
+            #     self.depth_score_dict[lcf] = score
+                                         
+        else:
+            factor = 0
+
+        # check progress of matching
+        # if pgv.check_dfs_matching == 'y':
+        #     # if i > 7:
+        #     #     msum = sum([len(m) for m in current_dict["matches"]])/i
+        #     #     if msum < pgv.matching_cutoff:
+        #     #         print("hitting eject", i,msum, pgv.matching_cutoff, current_dict["current_factors"])
+        #     #         return
+
+        #      if lcf > 0:
+        #         # print(current_dict["matches"])
+        #         # print("n_matches", i, n_matches, ncf, score)
+
+        #         if n_matches < pgv.match_intcpt +  pgv.match_slope * ncf:
+        #             # n_matches = len([m for m in current_dict["matches"] if m != []])
+        #             print(" terminating poor match", i, ncf, n_matches)
+        #             self.ectr += 1
+        #             return
+        
+        self.ctr += 1
+        self.parent_dict[self.ctr] = {"parent": parent, "index": i, "n_matches": n_matches, "depth": ncf, "score": score, "factor": factor}
+        parent = self.ctr
+
     
         for j in range(len(self.candidate_factors[i])):
             # if len(self.candidate_factors[i]) > 1:
@@ -193,9 +228,9 @@ class Combination_Product:
             current_dict["ms2_ions"].append(cid_ions)
             current_dict["m_list"].append(mtot)
             current_dict["matches"].append(matched_ions)
-    
+            # self.parent_dict[self.ctr] = self.parent
             #recursion...next node
-            self.dfs_product_ms2(i+1, current_dict)
+            self.dfs_product_ms2(i+1, current_dict, parent)
             # reset to try next candidate at position i
             current_dict["current_factors"].pop()
             current_dict["ms2_ions"].pop()
@@ -245,10 +280,360 @@ class Combination_Product:
 
     def combination_product(self):
     
-        self.dfs_product_ms2(0, {"current_factors": [], "ms2_ions": [], "m_list": [0], "matches": []})
+        self.dfs_product_ms2(0, {"current_factors": [], "ms2_ions": [], "m_list": [0], "matches": []}, 0)
         
-        return self.complete_list, self.ctr, self.bctr, self.nctr, self.ectr
+        # print("parent_dict", self.parent_dict)
+        
+        return self.complete_list, self.ctr, self.bctr, self.nctr, self.ectr, self.parent_dict
+# %% Combination_Product_BFS
 
+class Combination_Product_BFS:
+    def __init__(self, node_dict):
+        for key, val in node_dict.items():
+            setattr(self,key,val)
+        # globals:
+        #   candidate_factors = target composition of sequence given as prime factors
+        #   prime_multiple = target product of candidate_factors
+        #   node_node_list = list of all possible node values for each node in the sequence graph
+        #   z2_list = list of allowed charge states for MS2_ions
+        #   m0 = monoisotopic mass of target
+        #   ms2_vals = sorted_list of experimentl mz2 values for matching
+        #   ms2_intensities = sorted list of experimental intensities
+        #   length
+        self.ctr = 0
+        self.bctr = 0
+        self.nctr = 0
+        self.ectr = 0
+        self.complete_list = []
+        self.parent_dict = {}
+        self.depth_score_dict = {}
+        self.queue = []
+        # complete_dict
+        #   factors_list = current list of prime factors for completed sequences
+        #   ms2_ions_list = current list of ms2_ions for completed sequences
+        #   matched_ion_list - current list of matched_ions for completed sequences
+
+    def matching_ms2_dfs(self, cid_ions):  #cid ions is a list of ion dicts
+     
+        matches = []
+    
+        for cid in cid_ions:
+            mz2 = cid["mz2"]
+            ppmo = ppm_range(mz2, pgv.MS2_ppm_offset)
+            ppm = ppm_range(mz2 + ppmo , pgv.MS2_ppm) 
+            lower = mz2 + ppmo - ppm
+            upper = mz2 + ppmo + ppm
+            idxlo = max(bisect.bisect_left(self.ms2_vals,lower) - 2,0)
+            idxhi = min( bisect.bisect_left(self.ms2_vals,upper) + 2, len(self.ms2_vals))
+            
+            for idx in range(idxlo,idxhi):  # check for ppm tolerance
+                match_mass = self.ms2_vals[idx]
+                match_int = self.ms2_ints[idx]
+                calc_offset = ppm_offset(mz2, match_mass)
+                if abs(calc_offset) < pgv.MS2_ppm:
+                    matches.append(MS2_ion_match(mz2, cid["intensity"], cid["series"], cid["index"], cid["z"], match_mass, match_int, calc_offset))
+                    # matches.append({"theo_mz2": mz2,"theo_int": cid["intensity"], "series": cid["series"], 
+                    #                     "index": cid["index"], "z": cid["z"], "obs_mz2": match_mass, "obs_int": match_int, 
+                    #                     "ppmo": calc_offset})
+        return matches
+
+    def bfs_product_ms2(self, i): 
+        # i is current pointer = level pointer
+        
+        # current dict set is in self.queue
+        # current_dict:
+        #       current_factors = current list of prime factors for each 
+        #       ms2_ions = current list of ms2_ions up to current node
+        #       m_list = current list of cumulative masses up to current node
+        #       matches = current list of matches thru current node
+        
+        # self.parent = parent
+        level_factors = self.candidate_factors[i]
+        
+        level_queue = []
+        
+            
+        if len(level_factors) == 1:
+            for current_queue_dict in self.queue:
+
+                self.ctr += 1
+                current_dict = deepcopy(current_queue_dict)
+                current_dict["parent"] = current_dict["node_idx"]
+                current_dict["current_factors"].append(level_factors[0])
+                cf = current_dict["current_factors"]
+                lcf = len(cf)
+                mtot, cid_ions = self.next_node(current_dict["m_list"][i], self.node_list_list[i][0])
+                matched_ions = self.matching_ms2_dfs(cid_ions)
+                current_dict["ms2_ions"].append(cid_ions)
+                current_dict["m_list"].append(mtot)
+                current_dict["matches"].append(matched_ions)
+                n_matches = len([m for ml in current_dict["matches"] for m in ml if m != []])
+                score = pgv.match_intcpt + pgv.match_slope * n_matches
+                current_dict["node_idx"] = self.ctr
+                
+                # score_list.append(score)
+                # current_dict_list.append(deepcopy(current_dict))
+                # current_dict = deepcopy(current_layer_dict)
+                level_queue.append(deepcopy(current_dict))
+                factor = level_factors[0]
+                self.parent_dict[self.ctr] = {"parent": current_dict["parent"], "index": i, "n_matches": n_matches, "depth": i, "score": score, "factor": factor}
+                    # parent = self.ctr
+
+            
+        else:
+            score_list = []
+            branch_list = []
+            match_list = []
+            fac_list = []
+            for current_queue_dict in self.queue:
+                for j in range(len(level_factors)):
+                    current_dict = deepcopy(current_queue_dict)
+                    current_dict["parent"] = current_dict["node_idx"]
+                    # print("branching ", j)
+                    current_dict["current_factors"].append(self.candidate_factors[i][j])
+                    cf = current_dict["current_factors"]
+                    lcf = len(cf)
+                    
+                    # BAIL!
+                    if (self.prime_multiple/simple_product(cf)%1 != 0.0 and lcf) != 0:
+                        self.bctr += 1# terminating by not a factor
+                        # print("     ", "BAIL: bad composition layer ", i, "factor ", j, " = ", level_factors[j])
+                        # print(cf)
+                        continue
+                    
+                    # # DONE!
+                    # if simple_product(cf) == self.prime_multiple and lcf == len(self.candidate_factors): # solution!
+                    #      self.complete_list.append(copy.deepcopy(current_dict))
+                    #      print("     ", "DONE: prime multiple_match")
+                    #      # continue
+                
+    
+                    mtot, cid_ions = self.next_node(current_dict["m_list"][i], self.node_list_list[i][j])
+                    matched_ions = self.matching_ms2_dfs(cid_ions)
+                    current_dict["ms2_ions"].append(cid_ions)
+                    current_dict["m_list"].append(mtot)
+                    current_dict["matches"].append(matched_ions)
+                    n_matches = len([m for ml in current_dict["matches"] for m in ml if m != []])
+                    score = pgv.match_intcpt + pgv.match_slope * n_matches
+                    score_list.append(score)
+                    match_list.append(n_matches)
+                    fac_list.append(level_factors[j])
+                    # print("scores ", score, score_list)
+                    branch_list.append(deepcopy(current_dict))
+            if len(score_list) != 0:
+                max_score = max(score_list)
+                scores_sorted = sorted(score_list, reverse = True)
+                if len(score_list) > pgv.max_branches:
+                    score_cut = scores_sorted[pgv.max_branches]
+                else:
+                    score_cut = pgv.match_factor * max_score
+                for score, match, factor, branch in zip(score_list, match_list, fac_list, branch_list):
+                    if score >= score_cut:
+                        self.ctr += 1
+                        branch["node_idx"] = self.ctr
+                        # factor = self.candidate_factors[i][j]
+                        self.parent_dict[self.ctr] = {"parent": branch["parent"], "index": i, "n_matches": match, "depth": i, "score": score, "factor": factor}
+                        level_queue.append(branch)
+
+        
+        self.queue = deepcopy(level_queue)
+        
+       
+        print("level ", i, " has ", len(self.queue), " branches")
+
+                
+                    
+                    
+            
+#         cf = current_dict["current_factors"]
+#         lcf = len(cf)
+#         ncf = len([c for c in cf if c > 1])
+#         prod = simple_product(cf)
+        
+#         # print("bfs_product_ms2: i, current_dict,parent", i, current_dict, parent)
+#         # print("prod", prod, self.prime_multiple)
+#         # DONE!
+#         if prod == self.prime_multiple and lcf == len(self.candidate_factors): # solution!
+#             self.complete_list.append(copy.deepcopy(current_dict))
+#             # print("     ", "DONE: prime multiple_match")
+#             return
+        
+        
+        
+#         # BAIL!
+#         if (self.prime_multiple/simple_product(cf)%1 != 0.0 and lcf) != 0:
+#             self.bctr += 1# terminating by not a factor
+#             # print("     ", "BAIL: bad composition layer ", i)
+#             return
+
+# # either track score by depth, or do breadth first search
+
+#         # print()
+#         # print("current_dict_matches")
+#         # for m in current_dict["matches"]:
+#         #     for ml in m:
+#         #         print(ml)
+            
+#         # print(current_dict["matches"])
+#         n_matches = len([m for ml in current_dict["matches"] for m in ml if m != []])
+#         score = pgv.match_intcpt + pgv.match_slope * n_matches
+        
+#         if len(current_dict["current_factors"]) > 0: # branch point
+#             factor = current_dict["current_factors"][-1]
+#             # if lcf in self.depth_score_dict:
+#             #     if score < 0.5 * self.depth_score_dict[lcf]:
+#             #         # pass
+#             #         return
+#             #     if score > self.depth_score_dict[lcf]:
+#             #         self.depth_score_dict[lcf] = score
+#             # else:
+#             #     self.depth_score_dict[lcf] = score
+                                         
+#         else:
+#             factor = 0
+        
+        
+        
+#         self.ctr += 1
+#         self.parent_dict[self.ctr] = {"parent": parent, "index": i, "n_matches": n_matches, "depth": ncf, "score": score, "factor": factor}
+#         parent = self.ctr
+
+#         current_layer_dict = deepcopy(current_dict)
+#         # current_factor_list = current_factors
+#         # initial_factor_list = self.candidate_factors[i]
+#         score_list = []
+#         current_dict_list = []
+#         n_matches = len([m for ml in current_dict["matches"] for m in ml if m != []])
+#         print("before branching, n_matches = ", n_matches)
+
+#         for j in range(len(self.candidate_factors[i])): # go thru all possible nodes
+#             print("layer iteration ", i, j, self.candidate_factors[i][j])
+#             # if len(self.candidate_factors[i]) > 1:
+#             #        print(i,  sum([len(m) for m in current_dict["matches"]]), self.candidate_factors[i][j])
+#             #        print(current_dict["current_factors"])
+#             # # add candidate_node
+#             # print("layer current_factors before append", j, current_dict["current_factors"])
+#             current_dict["current_factors"].append(self.candidate_factors[i][j])
+#             cf = current_dict["current_factors"]
+#             lcf = len(cf)
+            
+#             # BAIL!
+#             if (self.prime_multiple/simple_product(cf)%1 != 0.0 and lcf) != 0:
+#                 self.bctr += 1# terminating by not a factor
+#                 # print("     ", "BAIL: bad composition layer ", i)
+#                 continue
+
+#             # print("layer current_factors after append", j, current_dict["current_factors"])
+#             # current_factors.append(self.candidate_factors[i][j])
+#             mtot, cid_ions = self.next_node(current_dict["m_list"][i], self.node_list_list[i][j])
+#             matched_ions = self.matching_ms2_dfs(cid_ions)
+#             current_dict["ms2_ions"].append(cid_ions)
+#             current_dict["m_list"].append(mtot)
+#             current_dict["matches"].append(matched_ions)
+#             n_matches = len([m for ml in current_dict["matches"] for m in ml if m != []])
+#             score = pgv.match_intcpt + pgv.match_slope * n_matches
+#             score_list.append(score)
+#             current_dict_list.append(deepcopy(current_dict))
+#             current_dict = deepcopy(current_layer_dict)
+#             # print("layer current_factors after restore", j, current_dict["current_factors"])
+#             # print("layer current_factors", j, current_dict["current_factors"])
+#         if len(score_list) == 0:
+#             return
+#             # current_factors = current_factor_list
+#         max_score = max(score_list)
+#         keep_dict_list = [c for s,c in zip(score_list, current_dict_list) if s >= max_score/2]
+#         if len(score_list) > 1: 
+#             print("score_list", score_list)
+#             print("keeping ", len(keep_dict_list), " of ", len(score_list))
+#         for c in keep_dict_list:
+
+#             # self.parent_dict[self.ctr] = self.parent
+#             #recursion...next node
+#             # self.ctr += 1
+#             # n_matches = len([m for ml in c["matches"] for m in ml if m != []])
+#             # score = pgv.match_intcpt + pgv.match_slope * n_matches
+#             # factor = c["current_factors"][-1]
+#             # cf = c["current_factors"]
+#             # ncf = len([c for c in cf if c > 1])
+#             # self.parent_dict[self.ctr] = {"parent": parent, "index": i, "n_matches": n_matches, "depth": ncf, "score": score, "factor": factor}
+#             # parent = self.ctr
+#             # print(i,c["current_factors"], parent, score, factor)
+#             print("going to next level", i, parent)
+#             self.bfs_product_ms2(i + 1, c, parent)
+#             # # reset to try next candidate at position i
+#             # current_dict["current_factors"].pop()
+#             # current_dict["ms2_ions"].pop()
+#             # current_dict["m_list"].pop()
+#             # current_dict["matches"].pop()
+            
+    def next_node(self, mtot, node):
+        nd = self.G.nodes[node] # node dict 
+        mtot += nd["group_mass"] # add mass of new node
+        cid_ions = []
+        fl = nd["fragment_left"]
+        fr = nd["fragment_right"]
+        ml = mtot + nd["H_corr_left"] * pgv.hmass
+        mr = self.m0 - ml + nd["H_corr_right"] * pgv.hmass
+
+    #   left fragment
+        if fl != "none":
+            if nd["main_side"] == "S": # side-chain does not split backbone
+                left = nd["resno"]
+            else:
+                left =  nd["resno"]+ nd["fragment_left_offset"]
+            for zs in self.z2_list:
+                mz2 = (ml + zs * pgv.hmass)/abs(zs)
+                if pgv.MS2_mzlow < mz2 < pgv.MS2_mzhigh: 
+                    cid_ions.append({"mz2": mz2, "intensity": 1.0, "series": fl, "index": left, "z": zs})
+            
+    #   right_fragment
+        if fr != "none":
+            if nd["main_side"] == "S": # side-chain does not split backbone
+                right = nd["resno"]
+            else:
+                right = self.length - nd["resno"] + nd["fragment_right_offset"]  # right ions are n-resno
+            for zs in self.z2_list:
+                mz2 = (mr + zs * pgv.hmass)/abs(zs)
+                if pgv.MS2_mzlow < mz2 < pgv.MS2_mzhigh: 
+                    cid_ions.append({"mz2": mz2, "intensity": 1.0, "series": fr, "index": right, "z": zs})
+                    if fr == 'y':  # add y-P loss
+                        mz2 = (mr - pgv.losses_dict['y-P']["loss_mass"] + zs * pgv.hmass)/abs(zs)
+                        cid_ions.append({"mz2": mz2, "intensity": 1.0, "series": 'y-P', "index": right, "z": zs})
+
+                    if fr == 'z':  # add z-P loss
+                        mz2 = (mr - pgv.losses_dict['z-P']["loss_mass"] + zs * pgv.hmass)/abs(zs)
+                        cid_ions.append({"mz2": mz2, "intensity": 1.0, "series": 'z-P', "index": right, "z": zs})
+
+        self.nctr += 1
+        return mtot, cid_ions
+
+    def combination_product(self):
+        
+        current_dict = {"current_factors": [], "ms2_ions": [], "m_list": [0], "matches": [], "node_idx":0, "parent": 0}
+        self.queue.append(current_dict)
+        parent = 0
+
+        for level in range(len(self.candidate_factors)):
+    
+            self.bfs_product_ms2(level)
+            parent += 1
+        
+        # print("final queue")
+        # for current_dict in self.queue:
+        #     print(current_dict["current_factors"])
+            
+        # print("complete_list")
+        # for cl in self.complete_list:
+        #     print(cl)
+        # print("parent_dict", self.parent_dict)
+        
+        print()
+        print("***********done with bfs******************")
+        print()
+        
+
+        
+        return self.queue, self.ctr, self.bctr, self.nctr, self.ectr, self.parent_dict
 # %%
 
 
@@ -304,8 +689,6 @@ def build_mass_dict():
     print("iso_mass_list", pgv.iso_mass_list)
     print("mod_mass_list", pgv.mod_mass_list)
 
-    # return iso_mass_dict, iso_mass_list, mod_mass_list
-
 def expand_seq_dfs(i, current, candidates, sequences):   # recursive algorithm for expanding combinations of sequences
     # i is pointer index, current is current sequence, candidates is list of nucleotides, sequences has results
     if i == len(candidates):
@@ -327,24 +710,18 @@ def find_compositions(mobs, mobs_adj): # find base compositions within tol of mo
 
     ppm_tol = pgv.MS1_ppm
     tol = mobs * ppm_tol/1000000.0
-    # seq_comps, mod_comps = sequence_compositions(mobs_adj, tol)   
     ctr = 0
     nt_mass_list = list(pgv.iso_mass_dict.keys())
     
-    # combo_sums, ctr, bctr = combination_sum(nt_mass_list, mobs_adj, tol)
     combo_sums, ctr, bctr = Combination_Sum(nt_mass_list, mobs_adj, tol).combination_sum()
 
     seq_comps = []
     for c in combo_sums:
         mseq = [pgv.iso_mass_dict[m] for m in c] # turn numbers into sequences
-        # print("mseq", mseq)
         expanded_sequences = []
         expand_seq_dfs(0,[],mseq,expanded_sequences)
-        # print("expanded sequences", expanded_sequences)
         seq_comps.extend(expanded_sequences)
-        
-        # seq_comps.append([b[0] for b in mseq])
-
+  
     print("find_compositions took " , ctr, "iterations", datetime.now() - tc, "with mod_bails ", bctr)
     
     return seq_comps, ppm_tol, tol
@@ -631,46 +1008,68 @@ def score_distribution_plot(sp, score, file):
     hfont = {'fontname':'Helvetica',
             'size'   : 10}
     
+    histopts = {"edgecolor": "black", "linewidth": 0.25, "alpha": 0.2}
+                
     if len(sp) < 5:
         return
     spa = np.asarray(sorted(sp))
     ecdf = sm.distributions.ECDF(spa)
+
     x = np.linspace(0,max(spa),num = 100)
     y = ecdf(spa)
     
-    fit_pars, covar = curve_fit(evd_cdf,spa,y)
-    mu, sig = fit_pars
+    try:
+        fit_pars, covar = curve_fit(evd_cdf,spa,y, p0 = [0.2,0.2,0.2])
+    except:
+        print("ECDF curve fit failed, skipping ", file)
+        return
     
-    cdf = evd_cdf(x,mu,sig)
-    pdf = evd_pdf(x,mu,sig)
+    mu, sig, eps = fit_pars
+    print("fit parameters ", fit_pars)
+    
+    cdf = evd_cdf(x,mu,sig, eps)
+    pdf = evd_pdf(x,mu,sig, eps)
+    
+    top_p = 1.0 - evd_cdf(spa[-1], mu, sig, eps)
+    top_p2 = 1.0 - evd_cdf(spa[-2], mu, sig, eps)
+
+    nSp = len(spa)
+    
+    # cdf_n = evd_cdf(x,mu,sig, eps)**nSp
+    # cdf_n1 = nSp * evd_cdf(x,mu,sig, eps)**(nSp-1)*(1-evd_cdf(x,mu,sig, eps)) + evd_cdf(x,mu,sig,eps)**nSp
     
     fig, (ax1,ax2) = plt.subplots(1, 2)
     fig.set_size_inches(6,3)
     
     #PDF subplot
-    ax1.hist(spa, density=True, bins=int(math.sqrt(len(spa))), histtype='stepfilled', alpha=0.2, label = "histogram")
+    ax1.hist(spa, density=True, bins=int(math.sqrt(len(spa))), color = "blue", label = "histogram", **histopts)
     ax1.set_xlim([spa[0], spa[-1]])
     ax1.legend(loc='best', frameon=False)
 
     ax1.plot(x,pdf, 'k-', lw=1, label='fitted pdf')
     ax1.set_xlabel(score, **hfont)
-    ax1.set_ylabel('PDF', **hfont)
+    ax1.set_ylabel('EPDF', **hfont)
+    ax1.legend()
     
     #CDF_subplot
     ax2.plot(spa, y, 'r-', lw = 1, label = "empirical distribution")
-    ax2.plot(x, cdf, 'k-', lw=1, label='fitted cdf')
+    ax2.plot(x, cdf, 'ko', lw=1, markersize = 0.2, label='fitted cdf')
     ax2.legend(loc='best', frameon=False)
-    ax2.plot(spa[-1],evd_cdf(spa[-1],mu,sig), 'ro', label = "best")
-    ax2.plot(spa[-2],evd_cdf(spa[-2],mu,sig), 'kv', label = "2nd best")
+    ax2.plot(spa[-1],evd_cdf(spa[-1],mu,sig, eps), 'ro', label = "top Sp = " + str(round(spa[-1],3)) + " p* = " +  str(round(top_p, 4)))
+    ax2.plot(spa[-2],evd_cdf(spa[-2],mu,sig, eps), 'kv', label = "2nd Sp = " + str(round(spa[-2],3)) + " p* = " + str(round(top_p2, 4)))
+    # ax2.plot(x, cdf_n, 'g-', lw = 1, label = "nth order statistic cdf")
+    # ax2.plot(x, cdf_n1, 'g--', lw = 1, label = "n-1th order statistic cdf")
     
     ax2.set_xlabel(score, **hfont)
     ax2.set_ylabel('CDF', **hfont)
     ax2.legend(loc="center right")
-    fig.suptitle(os.path.basename(file) + ' ' + score + ' dist: Shape = ' + str(round(mu,3)) + " Loc = " + str(round(sig,3))  + " n = " + str(len(sp)), **hfont)
+    ms2_key, seq, Sp, score, _ = os.path.basename(file).split("_")
+    fig.suptitle("#" + ms2_key + " " + seq + " " + score + ' dist: mu = ' + str(round(mu,2)) + " sig = " + str(round(sig,2)) + " eps = " + str(round(eps,2)) + " n = " + str(nSp), **hfont)
     print(" saving to ", file)
     plt.savefig(file)
     plt.close(fig)
 
+# TODO either skip or incorporate into score distribution plot...
 def rank_score_plot(sp, score, file):
 
     hfont = {'fontname':'Helvetica',
@@ -702,13 +1101,13 @@ def rank_score_plot(sp, score, file):
 
 
 def match_permutations_dfs(f3, ms2_key, label, cidx, n_comps):
-    # global G, node_list_list, candidate_factors, prime_multiple, m0, ms2_vals, ms2_ints, length, z2_list
     #node_list_list and candidate_factors are trees
     #prime_multiple and m0 are precursor proprties
     #ms2_vals and ms2_ints are spectrum properties
     t2 = datetime.now()
     
     node_dict = build_node_dict(f3, label)
+    # print("node_dict", f3, node_dict)
  
     spec = pgv.ms2_dict[ms2_key]
     ms2_vals = [mz2 for mz2, intensity in spec.ms2.items()]
@@ -720,15 +1119,10 @@ def match_permutations_dfs(f3, ms2_key, label, cidx, n_comps):
     z2_list = [z * zsign for z in pgv.MS_charge_dict["MS2_charges"][abs(spec.z)]]
     m0 = spec.mz1*abs(spec.z) - abs(spec.z)*zsign*pgv.hmass
     
-    # graph_node_dict = build_all_node_dict(m0, label) # keys are lengths
-
     precursor_dict = {}
     pidx = 0
 
-    # for length, node_dict in graph_node_dict.items():
-    # G, base_list, base_factor_list, node_list_list, candidate_factors, prime_multiple = build_node_list(f3, label)
     m0, mz1 = calculate_mz1(node_dict["G"], label, spec.z)
-           
     length = len(f3.seq3)
     
     node_dict["ms2_vals"] = ms2_vals
@@ -737,13 +1131,11 @@ def match_permutations_dfs(f3, ms2_key, label, cidx, n_comps):
     node_dict["z2_list"] = z2_list
     node_dict["length"] = length
     
-    # complete_list, ctr, bctr, nctr = combination_product()
-    # complete_list, ctr, bctr, nctr = Combination_Product(G, candidate_factors, prime_multiple, 
-    #                         node_list_list, z2_list, m0,  ms2_vals, ms2_ints, length).combination_product()
     start = datetime.now()
-    complete_list, ctr, bctr, nctr, ectr = Combination_Product(node_dict).combination_product()
+    # complete_list, ctr, bctr, nctr, ectr, pgv.parent_dict= Combination_Product(node_dict).combination_product()
+    complete_list, ctr, bctr, nctr, ectr, pgv.parent_dict= Combination_Product_BFS(node_dict).combination_product()
+    print(" done with new Combination Product")
     print("Combination_Product took", datetime.now() - start, "for ", len(complete_list), "matches")
-    # complete_list, ctr, bctr, nctr = Combination_Sum_Match(node_dict).combination_product()
 
     
     print(" number of dfs evals = ", ctr)
@@ -751,19 +1143,13 @@ def match_permutations_dfs(f3, ms2_key, label, cidx, n_comps):
     print(" number of mod bails = ", bctr)
     print("number of n_match bails = ", ectr)
 
-    # precursor_dict = {}
     frag_seq_key_list = []
-    # pidx = 0  # precursor index
+
     offset = 1000000.0 * (spec.mz1 - mz1)/spec.mz1
 
     for complete_dict in complete_list:
         # print("current_factors", complete_dict["current_factors"])
         seq3 = repack_current_factors(complete_dict["current_factors"], node_dict["base_list"], node_dict["base_factors_list"])
-        # first, seq3, last = unpack_current_factors(complete_dict["current_factors"])
-        # if first != "5OH":
-        #     print("bad 5'-end", first, seq3)
-        # if last != "PO3":
-        #     print("bad 3'-end", last, seq3)
         ms2_ions = repack_ion_list(complete_dict["ms2_ions"])
         matches = repack_match_list(complete_dict["matches"])
         match_length_list = [len(m) for m in complete_dict["matches"]]
@@ -850,12 +1236,6 @@ def discover_spectra():
         # if pgv.max_spectra != "all":
         #    if ms2_ctr > int(pgv.max_spectra):
         #        break
-        # save results for each ms2_separately
-        # garbage = gc.collect()
-        # print()
-        # print("**** garbage at ms2 key " ,ms2_key, " = ", garbage)
-        # print()
-        
         
         pgv.spec_dir = os.path.join(pgv.job_dir, "discovery_data_" + str(ms2_key))
         pgv.plot_dir = pgv.spec_dir
@@ -884,7 +1264,7 @@ def discover_spectra():
                 end5n = pgv.end_dict["end5"][end5]
                 end3n = pgv.end_dict["end3"][end3]
                 for label in pgv.isotopic_species:
-                    # fdict = {}
+
                     mobs_adj = mobs - (pgv.nt_fragment_dict[label][end5n].mass + pgv.nt_fragment_dict[label][end3n].mass)
         
                     seq_comps, ppm_tol, tol = find_compositions(mobs, mobs_adj) # need to add label 
@@ -909,11 +1289,12 @@ def discover_spectra():
                             print()
                             # continue
                         else:
-                            pgv.check_dfs_matching = 'n'
+                            pgv.check_dfs_matching = 'y'
                         f3 = fragment_sequence([end5n] + seq_comp + [end3n])
                         precursor_dict, top_sort, top_keys, top_frags, top_match = match_permutations_dfs(f3, ms2_key, label, cidx, len(seq_comps))
                         unpacked_precursor_dict = prune_precursor_dict(precursor_dict)
-                        # need to unpack precursor_dict and truncate 
+                        # insert here:  polish permutations
+                        
                         # maybe do Sp histogram first
                         master_composition_dict[cidx] = unpacked_precursor_dict
                         cidx += 1
@@ -926,8 +1307,6 @@ def discover_spectra():
         print("spectrum ", ms2_key, " took ", datetime.now() - t1 )
         print("*******")
         print()
-        # master_match_dict[ms2_key] = copy.deepcopy(master_composition_dict)
-    # return master_match_dict
     return ms2_file_list
 
 
@@ -985,14 +1364,35 @@ def unpack_master_discovery_dict(master_match_dict):
     
     return unpacked_dict
  
-def evd_pdf(x,mu,sig):
-    return np.exp((mu-x)/sig) * np.exp(-np.exp((mu-x)/sig))/sig
-def evd_cdf(x,mu,sig):
-    return np.exp(-np.exp((mu-x)/sig))
+# def evd_pdf(x,mu,sig):  # old Mathematica def....may be wrong
+#     return np.exp((mu-x)/sig) * np.exp(-np.exp((mu-x)/sig))/sig
+
+def evd_pdf(x, mu, sig, eps): # Generalized Extreme Value (GEV) distribution -- Wikipedia
+    # mu is location param
+    # sig is scale param
+    # eps is shape param
+    # t_of_x = (1 + eps*(x-mu)/sig)**(-1/eps))
+    pdf = (1 + eps*(x-mu)/sig)**(-(eps + 1)/eps) * np.exp( -(1 + eps*(x-mu)/sig)**(-1/eps) )/sig
+    return pdf
+
+
+# def evd_cdf(x,mu,sig):
+#     return np.exp(-np.exp((mu-x)/sig))
+#     # formulas from Mathematica for extreme value distribution
+#     # evdpdf[mu_, sig_, x_] := Exp[(mu - x)/sig] Exp[-Exp[(mu - x)/sig]]/sig
+#     # evdcdf[mu_, sig_, x_] := Exp[-Exp[(mu - x)/sig]]
+
+def evd_cdf(x, mu, sig, eps): # Generalized Extreme Value (GEV) distribution -- Wikipedia
+    cdf = np.exp( -(1 + eps*(x-mu)/sig)**(-1/eps) )
+    return cdf
     # formulas from Mathematica for extreme value distribution
     # evdpdf[mu_, sig_, x_] := Exp[(mu - x)/sig] Exp[-Exp[(mu - x)/sig]]/sig
     # evdcdf[mu_, sig_, x_] := Exp[-Exp[(mu - x)/sig]]
 
+# def inv_evd_cdf(u, mu, sig, eps): # Inverse Generalized Extreme Value (GEV) distribution -- Wikipedia ### DOES NOT WORK
+#     # icdf = -(1 + np.log(u)**(-eps))*(sig/eps) + mu
+#     icdf =sig * ((-np.log(u)**(-eps)) - (1- eps * mu/sig))/eps
+#     return icdf
 
 def validate_discovery():
     upm_df = pd.DataFrame.from_dict(pgv.unpacked_match_dict, orient = "index") # match output
@@ -1000,6 +1400,7 @@ def validate_discovery():
 
     ms2_keys = list(set(list(upm_df["ms2_key"].unique()) + list(dis_df["ms2_key"].unique())))
 
+    ms2_keys = pgv.ms2_key_list
     n_matches = 0
     n_sub_matches = 0
 
@@ -1016,11 +1417,11 @@ def validate_discovery():
             m_seq = generate_mod_seq(m_top["frag3"])
 
         if len(d_df) == 0:
-            print("ms2_key ", key, "no discovery", "match = ", m_seq)
+            print("ms2_key ", key, "no discovery:  match = ", m_seq)
             continue
         
         if len(m_df) == 0:
-            print("ms_key ", key, "no match", "discovery = ", d_seq)
+            print("ms_key ", key, "no match: discovery = ", d_seq)
             continue
         
         

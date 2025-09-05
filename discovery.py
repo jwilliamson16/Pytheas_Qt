@@ -26,10 +26,6 @@ def discovery():
     pgv.n_ms2_keys = len(list(pgv.ms2_dict.keys()))
     print("number of spectra = ", pgv.n_ms2_keys)
 
-    # if pgv.Sp_stats_plots == 'y':
-    #     pgv.plot_dir = os.path.join(pgv.job_dir, "Sp_plots")
-    #     Path(pgv.plot_dir).mkdir(parents=True, exist_ok=True)
-
 # TODO... implement Xcorr?    
 #     # if pgv.Xcorr =='y':
 #     #     ma.fft_MS2()
@@ -41,35 +37,21 @@ def discovery():
     
     # # #TODO    # need to loop thru labels
     # # TODO move to build_mass_dict??
-    # mass_dict = {key:val.mass for key,val in pgv.nt_fragment_dict["light"].items() if "end" not in pgv.nt_def_dict[key]["Type"]}
 
-    # pgv.iso_mass_dict, pgv.iso_mass_list, pgv.mod_mass_list = build_mass_dict(mass_dict, base_list)
+#TODO fix 7MG and more generally charge on nucleotide
     build_mass_dict()
-
-    # print("iso_mass_dict", pgv.iso_mass_dict)
-    # print("iso_mass_list", pgv.iso_mass_list)
-    # print("mod_mass_list", pgv.mod_mass_list)
     
-#     #TODO see if this actually helps in discovery mode....
-    
-    # pgv.master_precursor_dict = {}  # temporary dict to accumulate precursors and avoid recalculation ()  NOT USED??
-        
-    # pgv.discovery_dict = discover_spectra()
     pgv.ms2_file_list = discover_spectra()
     
-    # midx = 0
     pgv.discovery_dict = {}
     for ms2_file in pgv.ms2_file_list:
         ms2_key = int(ms2_file.split("/")[-1].split(".")[0].split("_")[-1])
         pgv.discovery_dict[ms2_key] = load_pickle(ms2_file)
-        # midx += 1
-        
-#TODO make this unpacked_discovery_dict
+
     pgv.unpacked_discovery_dict = unpack_master_discovery_dict(pgv.discovery_dict)
     
     discovery_job = pgv.discovery_job.split("_")[-1]
     discovery_file = "discovery_output" + "_" + discovery_job
-
     output_match_dict_file(pgv.unpacked_discovery_dict, discovery_file)
 
     pgv.top_discovery_dict, pgv.seq_discovery_dict, pgv.discovery_dict = consolidated_match_output(pgv.unpacked_discovery_dict, "consolidated_discovery_output")
@@ -82,15 +64,7 @@ def discovery():
  
     save_json_files(pgc.discovery_json, json_dir)
 
-#     pgv.write_json(pgv.master_match_dict, os.path.join(pgv.pytheas_data_folder, "master_match_dict.json"))
-#     pgv.write_json(pgv.unpacked_match_dict, os.path.join(pgv.pytheas_data_folder, "unpacked_match_dict.json"))
-#     pgv.write_json(pgv.match_dict, os.path.join(pgv.pytheas_data_folder, "match.json"))
-#     # pgv.write_json(top_match_dict, os.path.join(pgv.working_dir, "top_match.json"))
-#     # pgv.write_json(seq_match_dict, os.path.join(pgv.working_dir, "seq_match.json"))
-#     pgv.write_json(pgv.match_dict, os.path.join(pgv.pytheas_data_folder, "discovery_match.json"))
-#     pgv.write_json(pgv.iso_mass_dict, os.path.join(pgv.pytheas_data_folder, "iso_mass_dict.json"))
-
-# can't do sequence plot without sequence
+# TODO try to match on sequence
 #     if pgv.plot_sequence_map == 'y':
 #         max_seq_len = max([len(mdict["seq_list"]) for mdict in pgv.mol_dict.values()])
 #         if max_seq_len < 100:
