@@ -12,7 +12,7 @@ from pathlib import Path
 from pytheas_global_vars import pgv, pgc
 from pytheas_IO import read_pytheas_file, save_json_files, load_pickle
 
-from discovery_functions import (build_mass_dict, discover_spectra,
+from discovery_functions import (build_mass_dict, discover_spectra, discover_spectra_parallel,
                                     unpack_master_discovery_dict, 
                                     validate_discovery)
 from match_functions import output_match_dict_file, consolidated_match_output
@@ -41,7 +41,10 @@ def discovery():
 #TODO fix 7MG and more generally charge on nucleotide
     build_mass_dict()
     
-    pgv.ms2_file_list = discover_spectra()
+    if pgv.parallel_discovery == "y":
+        pgv.ms2_file_list = discover_spectra_parallel()
+    else:
+        pgv.ms2_file_list = discover_spectra()
     
     pgv.discovery_dict = {}
     for ms2_file in pgv.ms2_file_list:
@@ -57,12 +60,13 @@ def discovery():
     pgv.top_discovery_dict, pgv.seq_discovery_dict, pgv.discovery_dict = consolidated_match_output(pgv.unpacked_discovery_dict, "consolidated_discovery_output")
  
 #TODO  add Sp to validation output
-    validate_discovery()
+    # validate_discovery()
     
     json_dir = os.path.join(pgv.job_dir, "pytheas_json_files")
     Path(json_dir).mkdir(parents=True, exist_ok=True)
  
-    save_json_files(pgc.discovery_json, json_dir)
+    if pgv.save_discovery_json == 'y':
+        save_json_files(pgc.discovery_json, json_dir)
 
 # TODO try to match on sequence
 #     if pgv.plot_sequence_map == 'y':

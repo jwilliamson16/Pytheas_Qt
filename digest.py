@@ -14,7 +14,8 @@ from pathlib import Path
 
 from pytheas_global_vars import pgv, pgc
 from digest_functions import (add_modifications, enzyme_digest, add_precursor_ions,
-                            build_frag_dict, build_precursor_dict,  output_digest_file)
+                            build_frag_dict, build_precursor_dict,  output_digest_file,
+                            make_digest_sequence_plot, make_long_digest_sequence_plot)
 from pytheas_IO import read_pytheas_file, save_json_files
 
 def digest():
@@ -68,14 +69,23 @@ def digest():
     print("    Number of unique precursor ions: ", len(pgv.unique_precursor_dict))
     print()
     
-    json_dir = os.path.join(pgv.job_dir, "pytheas_json_files")
-    Path(json_dir).mkdir(parents=True, exist_ok=True)
- 
-    save_json_files(pgc.digest_json, json_dir)
+    if pgv.output_digest_json == "y":
+        json_dir = os.path.join(pgv.job_dir, "pytheas_json_files")
+        Path(json_dir).mkdir(parents=True, exist_ok=True)
+        save_json_files(pgc.digest_json, json_dir)
     
     digest_job = pgv.digest_job.split("_")[-1]
     digest_file = "digest_output" + "_" + digest_job
     output_digest_file(digest_file)
+    
+     
+    if pgv.plot_digest_map == 'y':
+        max_seq_len = max([len(mdict["seq3"]) for mdict in pgv.mol_dict.values()])
+        if max_seq_len < 100:
+            make_digest_sequence_plot("digest_sequence_map" + digest_job) 
+        else:
+            make_long_digest_sequence_plot("digest_sequence_map" + digest_job)
+            
     
     if pgv.run == "CL":
         pgv.widget_dict["digest_output"].load_value(digest_file + ".xlsx")

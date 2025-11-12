@@ -169,7 +169,7 @@ def read_modification_sets(file):
     print("sets in df: ", sets)
     for set_name in sets:
         # pgv.set_dict[set_name] = [base for base in list(set_df[set_name]) if str(base) != 'nan' and base in pgv.nt_key_dict]
-        pgv.set_dict[set_name] = [base for base in list(set_df[set_name]) if str(base) != 'nan']
+        pgv.set_dict[set_name] = [base for base in list(set_df[set_name]) if str(base) != 'nan' and str(base) != " "]
         print("   set name ", set_name, pgv.set_dict[set_name])
     # set_widget = pgv.widget_dict["modification_set"]  #noqa
     # cb_set = [cb.text() for cb in set_widget.cb_list]

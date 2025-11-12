@@ -11,102 +11,20 @@ import copy
 from random import shuffle
 import xlsxwriter
 import pickle
+import math
 
-import networkx as nx
+
 import pandas as pd
+import numpy as np
 
-from pytheas_global_vars import pgv
+from pytheas_global_vars import pgv, pgc
 from pytheas_IO import read_pytheas_file
 from pytheas_objects import fragment_sequence
 from worksheet_functions import format_worksheet_columns
+from matrix_plot_functions import make_mod_text_dict, sequence_color, matrix_plot, make_seq_text_dict, make_long_text_dict, make_text_dict
+from mod_seq_functions import (parse_mod_seq, generate_mod_seq, generate_mod_seq_ends,
+                               parse_1_letter, generate_molecular_graph)
 
-
-def parse_mod_seq(raw_seq): # parse sequence for mod synonyms in brackets ["mod"] # digest
-    
-    length = len(raw_seq)
-    lb = [pos for pos, char in enumerate(raw_seq) if char == "["] + [length] # find bracket positions
-    rb = [pos for pos, char in enumerate(raw_seq) if char == "]"] + [length]
-    slist = []
-    
-    i = 0
-    lb_flag = 0
-    for i in range(length): # iterate thru sequence, capturing mods between brackets
-        if i in lb:
-            lb_flag = 1
-            mod = []
-            continue
-        if i in rb:
-            lb_flag = 0
-            slist = slist + ["".join(mod)]
-            continue
-        if lb_flag == 1:
-            mod.append(raw_seq[i])
-        else:
-            slist.append(raw_seq[i])
-
-    slist = [s for s in slist if s != ""]
-    slist = [s for s in slist if s != []]
-    bogus_list = [s for s in slist if s not in pgv.nt_key_dict["Pytheas_ID"]]
-    if bogus_list != []:
-        s3list = "MODIFICATION INPUT ERROR " + " ".join(bogus_list)
-    else:
-        s3list = [pgv.nt_key_dict["Pytheas_ID"][s] for s in slist] # generate 3-base code for mods
-    
-    return s3list
-
-def parse_1_letter(raw_seq):  # parse raw fasta sequence to 3-letter...all rna_mods except "fasta" 
-    if pgv.rna_mods == "none" or pgv.rna_mods == "modfile":
-        code_key = "Pytheas_ID"
-    else:
-        code_key = pgv.rna_mods
-
-    length = len(raw_seq)
-    s3list = []
-    for i in range(length):
-        m1 = raw_seq[i]
-        b3 = pgv.nt_key_dict[code_key][m1]
-        if b3 in pgv.nt_def_dict:
-            s3list.append(b3)
-        else:
-            print ("problem with code ", pgv.rna_mods, m1, " in raw sequence ", raw_seq)
-    return s3list
-
-def generate_mod_seq(seq3): # convert 3-letter seq_list to 1-base + [mod] string 
-    mod_seq_list = []
-    for base in seq3:
-        if base == "XXX":  # what's this for???
-            mod_seq_list.append('X')
-        elif pgv.nt_def_dict[base]["Type"] == "natural":
-            mod_seq_list.append(pgv.nt_def_dict[base]["Pytheas_1_letter_code"])
-        else:
-            if type(pgv.nt_def_dict[base]["Pytheas_ID"])  != float:
-                mod_seq_list.append("[" + pgv.nt_def_dict[base]["Pytheas_ID"] + "]")
-            else:
-                mod_seq_list.append("[" + base + "]")
-    mod_seq = "".join(mod_seq_list)
-    
-    return mod_seq
-
-def generate_mod_seq_ends(frag3): # convert 3-letter seq_list to 1-base + [mod] string 
-    end5 = frag3[0]
-    seq3 = frag3[1:-1]
-    end3 = frag3[-1]
-    mod_seq_list = []
-    for base in seq3:
-        if base == "XXX":  # what's this for???
-            mod_seq_list.append('X')
-        elif pgv.nt_def_dict[base]["Type"] == "natural":
-            mod_seq_list.append(pgv.nt_def_dict[base]["Pytheas_1_letter_code"])
-        else:
-            if type(pgv.nt_def_dict[base]["Pytheas_ID"])  != float:
-                mod_seq_list.append("[" + pgv.nt_def_dict[base]["Pytheas_ID"] + "]")
-            else:
-                mod_seq_list.append("[" + base + "]")
-    mod_seq = "".join(mod_seq_list)
-    e5 = [key for key, val in pgv.end_dict["end5"].items() if val == end5]
-    e3 = [key for key, val in pgv.end_dict["end3"].items() if val == end3]
-    mod_seq = "_".join([e5[0], mod_seq, e3[0]])
-    return mod_seq
 
 def add_modifications(): # parse raw fasta seq and add modifications
 
@@ -210,7 +128,7 @@ def unique_fragment(mol, end5, seq3, end3, fr, to, length, miss, ufdict, frag_se
         else:
             frac_mod = round(partial_mod_count/full_mod_count, 2)
     
-        frag_seq_key = ":".join([mol, "_".join([str(fr+1), str(to-1)]), f3.frag])
+        frag_seq_key = ":".join([mol, "_".join([str(fr+1), str(to)]), f3.frag])
         ufdict[frag_seq_key] = {"mol": mol, "frag3": frag3}
         ufdict[frag_seq_key].update({"fr": fr, "to": to, "length": length, "miss": miss, 
                                      "partial_mod": frac_mod, "partial_key": partial_key})
@@ -238,15 +156,20 @@ def generate_cut_list(seq3, enzyme):
                 match_index_list.append(i)
 
     length = len(seq3)
-    last = length + 1
+    last = length
     
-    cut_index_list = [0] + [m + cut_idx for m in match_index_list] + [last] # add cut offset from match
+    cut_index_list = [m + cut_idx for m in match_index_list] # add cut offset from match
+    if cut_index_list[0] > 0:
+        cut_index_list = [0] + cut_index_list
+    if cut_index_list[-1] < last:
+        cut_index_list = cut_index_list + [last]
+    
     misses = min(pgv.miss, len(cut_index_list)-2) # of matches - 2 ends
     cut_list = [[cut_index_list[i], cut_index_list[i+miss + 1], miss] # loop thru cut_index_list for each miss 
                 for miss in range(misses+1) 
                 for i in range(len(cut_index_list) - miss - 1)]
 
-    return cut_list
+    return cut_list  # [fr:to]
 
 def generate_custom_cut_list(seq3, mol, ufdict, frag_seq_key_list):
     
@@ -324,7 +247,8 @@ def digest_sequence(mol, mdict, ufdict, enzyme): # process one sequence # digest
 
      if enzyme == "none":
          fr = 0
-         to = len(seq3) + 1
+         # to = len(seq3) + 1
+         to = len(seq3)
          length = len(seq3)
          end5_list = mdict["mol_5_end"]
          end3_list = mdict["mol_3_end"]
@@ -368,49 +292,6 @@ def add_precursor_ions(frag_dict, z_limit): # zlimit is specific z or "all" to t
     return nprec
 
 
-def generate_molecular_graph(f3, label): # new toplogy
-    G = nx.Graph() # initialize molecular graph
-
-    for resno in range(len(f3)): # add node to graph for each group
-        for g in pgv.nt_fragment_dict[label][f3[resno]].groups:
-            node = "_".join([f3[resno], str(resno), g])
-            G.add_node(node, base = f3[resno], resno = resno, group = g)
-
-#TODO calculate node mass here 
-
-    for node in G.nodes:  # fill out graph nodes with data for fragmentation from topo dict
-        nd = G.nodes[node]
-        res =nd["resno"]
-        base = nd["base"]
-        # print("generate_molecular_graph", res, base,nd["group"])
-        nd.update(pgv.child_dict[nd["group"]]) # add topology info
-        parent_group, child_group = nd["added_edge"].split("_")
-        child_res = res + nd["child_offset"]
-        child_base = f3[child_res]
-
-        if nd["parent_offset"] == 0: # standard linkage
-            parent_node = "_".join([base, str(res), parent_group])
-            child_node = "_".join([child_base, str(child_res), child_group])
-        else: # 3'-terminal linkage
-            parent_res = res + nd["parent_offset"] 
-            parent_base = f3[parent_res]
-            parent_node = "_".join([parent_base, str(parent_res), parent_group])
-            child_node = "_".join([base, str(res), child_group])
-
-        nd["parent_node"] = parent_node
-        if child_node not in G.nodes: # patch for 3'-linkage
-            nd["child_node"] = "none"
-            continue
-        else:
-            nd["child_node"] = child_node
-        
-        G.add_edge(parent_node, child_node)
-
-#TODO   reconcile with discovery and next_node    
-        # nd["group_mass"] = pgv.nt_fragment_dict["light"][G.nodes[node]["base"]].mass_dict[G.nodes[node]["group"]]
-        # print("generate_mol_graph: nd.keys()", nd.keys())
-
-    return G
 
 
 def calculate_m0_mz1(G, label, seq3n, z_limit): 
@@ -546,4 +427,156 @@ def output_digest_file(output_file): # move to worksheet functions
    
     workbook.close()
 
+def make_digest_sequence_plot(output_file):
+    
+    # determine matrix dimensions nr = n_seq, nc = max_seq_len
+    max_seq_len = 0
+    for mol, mdict in pgv.mol_dict.items():
+        slen = len(mdict["seq3"])
+        if slen > max_seq_len:
+            max_seq_len = slen
+    n_seq = len(list(pgv.mol_dict.keys()))
+
+    row_labels = [mol for mol in pgv.mol_dict.keys()]
+    col_labels = [str(i+1) for i in range(max_seq_len)]
+   
+    color_matrix = np.asarray([[pgc.white_hsv for i in range(max_seq_len)] for j in range(n_seq)])
+    nr, nc, _ = color_matrix.shape
+
+    for mol, mdict in pgv.mol_dict.items(): # gray out entries with no sequence
+        slen = len(mdict["seq3"])
+        row_idx = row_labels.index(mol)
+        for i in range(slen, max_seq_len): # gray
+            color_matrix[row_idx,i] = pgc.dark_gray
+    
+    # text labels for mods
+    # mod_text_dict = make_mod_text_dict(row_labels, col_labels, True, "", 100)
+    seq_text_dict = make_text_dict(row_labels, col_labels, 100)
+
+    # add modifications to sequence matrix as red...to be overwritten if matched
+    for key, mdict in pgv.mod_dict.items():
+        molecule = mdict["Molecule"]
+        idx = mdict["Position"]
+        if molecule in row_labels:
+            row_idx = row_labels.index(molecule)
+            col_idx = idx - 1
+            color_matrix[row_idx, col_idx] = pgc.red
+
+    for f, fdict in pgv.frag_dict.items():
+    # for m, mdict in pgv.match_dict.items():
+        if fdict["frag_type"] != "target": # skip decoys
+            continue
+        seq_list = fdict["seq_list"]
+        n_frags = len(seq_list)
+        seq3 = fdict["frag3"][1:-1]
+        print("frag", f, seq_list)
+        for seq in seq_list:
+            mol, r, _ = seq.split(":")
+            row_idx = row_labels.index(mol)
+            # if mol != molecule:
+            #     continue
+            
+            fr, to = map(int,r.split("_"))   # these are sequence indices
+            seq3_idx = 0     
+            for idx in range(fr, to + 1):                    
+                # row_idx = math.floor((idx-1)/nc)
+                col_idx = idx - 1
+                color_matrix[row_idx, col_idx] = sequence_color(n_frags, seq3[seq3_idx])
+                seq3_idx += 1
+
+#TODO add light color for non-top match
+    # print("keys", pgv.unique_frag_dict.keys())
+    # for u, udict in pgv.unique_frag_dict.items():
+    #     # mol_list = udict["mol_list"].split(" ")
+    #     mol = udict["mol"]
+    #     full_length = len(pgv.mol_dict[mol]["seq3"])
+    #     # n_matches = len(mol_list)
+    #     seq3 = udict["frag3"][1:-1]
+    #     # if len(seq3) == full_length:
+    #     #     continue
+    #     # for mol_str in mol_list:
+    #     #     mol, r = mol_str.split(":")
+    #     if mol not in pgv.mol_dict:
+    #         continue
+    #     row_idx = row_labels.index(mol)
+    #     col_fr = udict["fr"]
+    #     col_to = udict["to"]
+    #     print(col_fr, col_to, mol, seq3)
+    #     # col_fr, col_to = map(int,r.split("_"))
+    #     seq3_idx = 0
+    #     for col_idx in range(col_fr, col_to):
+    #         # print(seq3, len(seq3) + 1, col_idx, seq3_idx)
+    #         if seq3_idx >= len(seq3):
+    #             # print("fragment too long", seq3, mol_str)
+    #             break
+    #         color_matrix[row_idx, col_idx] = sequence_color(1, seq3[seq3_idx])
+    #         seq3_idx += 1
+
+    matrix_plot(color_matrix, row_labels, col_labels, seq_text_dict, output_file)
+
+
+
+def make_long_digest_sequence_plot(output_file):
+    
+    # plot long sequences as blocks of 100, one plot for each sequence
+    nc = 100
+    for molecule, mdict in pgv.mol_dict.items():
+        slen = len(mdict["seq3"])
+        nr = math.floor(slen/nc)
+        if slen%100 != 0:
+            nr += 1
+            
+        row_labels = [molecule + "(" + str(100*row + 1) + ":" + str(100*(row + 1)) + ")"  for row in range(nr)]
+        col_labels = [str(i+1) for i in range(nc)]
+       
+        color_matrix = np.asarray([[pgc.white_hsv for i in range(nc)] for j in range(nr)])
+         
+        for row in range(nr): # gray out cells > length of seq
+            for col in range(nc):
+                idx = 100*row + col + 1
+                if idx > slen:
+                    color_matrix[row, col] = pgc.dark_gray # dark gray
+         
+        # add modifications to sequence matrix...to be overwritten if matched
+        for key, mdict in pgv.mod_dict.items():
+            if mdict["Molecule"] != molecule:
+                continue
+            idx = mdict["Position"]
+            row_idx = math.floor((idx-1)/nc)
+            col_idx = idx - 100 * row_idx - 1
+            color_matrix[row_idx,col_idx] = pgc.red
+
+        # text labels for mods
+        # mod_text_dict = make_mod_text_dict(row_labels, col_labels, False, molecule, nc)
+        # if pgv.base_labels_seq_map == "y":
+        #     seq_text_dict = make_seq_text_dict(row_labels, col_labels, False, molecule, nc)
+        # else:
+        #     seq_text_dict = {}
+        # seq_text_dict.update(mod_text_dict) # overwrite seq
+        
+        seq_text_dict = make_long_text_dict(row_labels, col_labels, molecule, nc)
+        
+        # fill out sequence matrix based on unique/multiple IDs
+        for f, fdict in pgv.frag_dict.items():
+        # for m, mdict in pgv.match_dict.items():
+            if fdict["frag_type"] != "target": # skip decoys
+                continue
+            seq_list = fdict["seq_list"]
+            n_frags = len(seq_list)
+            seq3 = fdict["frag3"][1:-1]
+            for seq in seq_list:
+                mol, r, _ = seq.split(":")
+                if mol != molecule:
+                    continue
+                
+                fr, to = map(int,r.split("_"))   # these are sequence indices
+                seq3_idx = 0     
+                for idx in range(fr, to + 1):                    
+                    row_idx = math.floor((idx-1)/nc)
+                    col_idx = idx - 100 * row_idx - 1
+                    color_matrix[row_idx, col_idx] = sequence_color(n_frags, seq3[seq3_idx])
+                    seq3_idx += 1
+
+        output_mol_file = output_file + "_" + molecule
+        matrix_plot(color_matrix, row_labels, col_labels, seq_text_dict, output_mol_file)
 

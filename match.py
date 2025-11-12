@@ -19,7 +19,7 @@ from match_functions import (match_spectra, unpack_match_dict, iTRAQ_quantitatio
                                  consolidated_match_output, make_sequence_plot, 
                                  make_long_sequence_plot, plot_ms2_spectra)
 
-from match_functions import ppm_offset_plot,top_Sp_histogram
+from match_functions import ppm_offset_plot,top_Sp_histogram, match_output_for_massacre
 
 # nctr = 0
 def match():    
@@ -51,6 +51,8 @@ def match():
 #TODO which of these are needed...        
     top_match_dict, pgv.seq_match_dict, pgv.match_dict = consolidated_match_output(pgv.unpacked_match_dict, "consolidated_match_output" + match_job)
  
+    if pgv.massacre_input == "y":
+        match_output_for_massacre()
     print()
     print("STEP 4: GENERATE SEQUENCE MAP AND PLOT SPECTRA")
     if pgv.run == "CL":
@@ -63,12 +65,10 @@ def match():
         else:
             make_long_sequence_plot("match_sequence_map" + match_job)
         
-    
-# write out json files 
-    json_dir = os.path.join(pgv.job_dir, "pytheas_json_files")
-    Path(json_dir).mkdir(parents=True, exist_ok=True)
-
-    save_json_files(pgc.match_json, json_dir)
+    if pgv.output_match_json == "y":  # write out json files 
+        json_dir = os.path.join(pgv.job_dir, "pytheas_json_files")
+        Path(json_dir).mkdir(parents=True, exist_ok=True)
+        save_json_files(pgc.match_json, json_dir)
     
     print("pgv.plot_MS2_spectra: ", pgv.plot_MS2_spectra)
     if pgv.plot_MS2_spectra == 'y':

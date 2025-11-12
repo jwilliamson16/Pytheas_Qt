@@ -259,6 +259,9 @@ def inSilicoDigest():  # main pytheas module
         Error("Error in " + error, "check fasta and mod input files!")
     SaveRunParameters("digest", next_dir)
     print("Done with In Silico Digestion!")
+    print()
+    print()
+    
     logger.close()
         
 def matchSpectra(): # main pytheas module
@@ -282,6 +285,8 @@ def matchSpectra(): # main pytheas module
     match()
     SaveRunParameters("matching", next_dir)
     print("Done with Matching MS2 spectra")
+    print()
+    print()
     logger.close()
 
 def Discovery():
@@ -504,6 +509,7 @@ try:
     run_mode = get_ipython().__class__.__name__
 except:
     run_mode = "command_line"
+    print("command_line_arguments: ", sys.argv)
 
 if run_mode == 'SpyderShell':
 
@@ -516,8 +522,16 @@ else:
     # pgv.run = "CL"
     # if __name__ == "__main__":
     print("launching Pytheas app...")
-    main_window.show()
-    app.exec()
+    if "--nogui" not in sys.argv:
+        main_window.show()
+        app.exec()
+    else:
+        print("no GUI, running command line...")
+    # else:
+    #     Load_Global_Vars()
+    #     inSilicoDigest()
+        
+        
 
 
 

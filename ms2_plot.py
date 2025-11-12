@@ -25,7 +25,7 @@ from PyQt5.QtCore import Qt
 
 
 from pytheas_global_vars import  pgv, pgc
-from digest_functions import generate_mod_seq
+from mod_seq_functions import generate_mod_seq
 
 class ion_text_label:
     def __init__(self, text, text_object, x, y):

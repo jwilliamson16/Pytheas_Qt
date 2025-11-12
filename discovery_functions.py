@@ -12,7 +12,7 @@ from pytheas_global_vars import pgv, pgc
 from pytheas_objects import fragment_sequence
 from digest_functions import generate_mod_seq
 from scoring_functions import ppm_range, ppm_offset
-from match_functions import scoring, rank_matches
+from match_functions import scoring, rank_matches, output_match_dict_file
 from pytheas_IO import save_pickle
 # import digest_functions as dg
 # import match_functions as ma
@@ -30,6 +30,8 @@ import pandas as pd
 # import gc
 from pathlib import Path
 from copy import deepcopy
+
+import multiprocessing
 
 import os
 from datetime import datetime
@@ -66,6 +68,7 @@ class Combination_Sum:
         self.target =  target # mz1
         self.tol = tol  # pgv.MS1_ppm
         self.results = []  # combinations to return
+        self.offsets = []
         self.ctr = 0  # counter for recursion
         self.bctr = 0 # counter for bailing
         
@@ -76,8 +79,10 @@ class Combination_Sum:
         if count > pgv.max_mods:
             self.bctr += 1
             return
-        if abs(total - self.target) < self.tol:
+        offset = total - self.target
+        if abs(offset) < self.tol:
             self.results.append(current.copy())
+            self.offsets.append(offset)
             return
         if i >= len(self.candidates) or total > self.target:
             return
@@ -89,7 +94,7 @@ class Combination_Sum:
     
     def combination_sum(self):
         self.depth_first_search(0, [], 0)
-        return self.results, self.ctr, self.bctr
+        return self.results, self.offsets, self.ctr, self.bctr
 # %% Combination_Product
 
 
@@ -439,7 +444,7 @@ class Combination_Product_BFS:
         self.queue = deepcopy(level_queue)
         
        
-        print("level ", i, " has ", len(self.queue), " branches")
+        # print("level ", i, " has ", len(self.queue), " branches")
 
                 
                     
@@ -703,17 +708,19 @@ def expand_seq_dfs(i, current, candidates, sequences):   # recursive algorithm f
         expand_seq_dfs(i+1, current, candidates, sequences)
         current.pop()
 
-def find_compositions(mobs, mobs_adj): # find base compositions within tol of mobs
+def find_compositions(mobs, mobs_adj, mz1, z): # find base compositions within tol of mobs
 
 #TODO bail if pgv.max_mods exceeded
     tc = datetime.now()
 
     ppm_tol = pgv.MS1_ppm
-    tol = mobs * ppm_tol/1000000.0
+    # tol = mobs * ppm_tol/1000000.0   # this may be too generous...tol on m0, not mz1
+    mz1_tol = mz1 * ppm_tol/1000000.0   # this may be too generous...tol on m0, not mz1
+    m0_tol = mz1_tol * z
     ctr = 0
     nt_mass_list = list(pgv.iso_mass_dict.keys())
     
-    combo_sums, ctr, bctr = Combination_Sum(nt_mass_list, mobs_adj, tol).combination_sum()
+    combo_sums, offsets, ctr, bctr = Combination_Sum(nt_mass_list, mobs_adj, m0_tol).combination_sum()
 
     seq_comps = []
     for c in combo_sums:
@@ -724,7 +731,7 @@ def find_compositions(mobs, mobs_adj): # find base compositions within tol of mo
   
     print("find_compositions took " , ctr, "iterations", datetime.now() - tc, "with mod_bails ", bctr)
     
-    return seq_comps, ppm_tol, tol
+    return seq_comps, offsets, ppm_tol, m0_tol, mz1_tol
 
 def generate_molecular_graph(f3, label):   # same as digest_functions
     G = nx.Graph() # initialize molecular graph
@@ -1238,11 +1245,11 @@ def discover_spectra():
         #        break
         
         pgv.spec_dir = os.path.join(pgv.job_dir, "discovery_data_" + str(ms2_key))
-        pgv.plot_dir = pgv.spec_dir
-        Path(pgv.spec_dir).mkdir(parents=True, exist_ok=True)
+        # pgv.plot_dir = pgv.spec_dir
+        # Path(pgv.spec_dir).mkdir(parents=True, exist_ok=True)
 
-        if ms2_ctr > 300:
-            break
+        # if ms2_ctr > 300:
+        #     break
         ms2_ctr += 1
         t1 = datetime.now()
         cidx = 0 # composition index
@@ -1267,8 +1274,8 @@ def discover_spectra():
 
                     mobs_adj = mobs - (pgv.nt_fragment_dict[label][end5n].mass + pgv.nt_fragment_dict[label][end3n].mass)
         
-                    seq_comps, ppm_tol, tol = find_compositions(mobs, mobs_adj) # need to add label 
-                    print("Compositions:")
+                    seq_comps, offsets, ppm_tol, tol, mz1_tol = find_compositions(mobs, mobs_adj, spec.mz1, z) # need to add label 
+                    print("Found ", len(seq_comps), " Compositions:")
                     for comp in seq_comps:
                         print("   ", comp)
                     # print("m0 tolerance: ", ms2_key, ppm_tol, round(tol, 5), "# comps = ", len(seq_comps))
@@ -1299,15 +1306,208 @@ def discover_spectra():
                         master_composition_dict[cidx] = unpacked_precursor_dict
                         cidx += 1
         
-        pickle_file = os.path.join(pgv.spec_dir, "discovery_" + str(ms2_key) + ".pkl")
-        ms2_file_list.append(pickle_file)
-        print("Saved: ", pickle_file)
+        #TODO only save if there are matches
+        if len(master_composition_dict) > 0:
+            pgv.spec_dir = os.path.join(pgv.job_dir, "discovery_data_" + str(ms2_key))
+            pgv.plot_dir = pgv.spec_dir
+            Path(pgv.spec_dir).mkdir(parents=True, exist_ok=True)
+    
+            pickle_file = os.path.join(pgv.spec_dir, "discovery_" + str(ms2_key) + ".pkl")
+            ms2_file_list.append(pickle_file)
+            print("Saved: ", pickle_file)
+    
+            save_pickle(master_composition_dict, pickle_file)
+            
+            # print("master_composition_dict", master_composition_dict.keys())
+            # for key, mdict in master_composition_dict.items():
+            #     print(key,mdict.keys() )
+            # print(master_composition_dict)
+            discovery_file = "discovery_" + str(ms2_key)
+            # unpacked_discovery_dict = unpack_master_discovery_dict(master_composition_dict)
+            unpacked_discovery_dict = unpack_single_discovery_dict(ms2_key, master_composition_dict)
+            # print("unpacked_discovery_dict", unpacked_discovery_dict)
+            
+            # TODO fix this hack 
+            temp = pgv.job_dir
+            pgv.job_dir = pgv.spec_dir
+            output_match_dict_file(unpacked_discovery_dict, discovery_file)
+            pgv.job_dir = temp
 
-        save_pickle(master_composition_dict, pickle_file)
-        print("spectrum ", ms2_key, " took ", datetime.now() - t1 )
-        print("*******")
-        print()
+            print("spectrum ", ms2_key, " took ", datetime.now() - t1 )
+            print("*******")
+            print()
     return ms2_file_list
+
+
+def discover_compositions():
+    
+    build_mass_dict()
+    
+    ms2_ctr = 0
+    composition_dict = {}
+    
+    for ms2_key in pgv.ms2_key_list:  # discover_spectra() return master_match_dict
+        spec = pgv.ms2_dict[ms2_key]
+        
+        ms2_ctr += 1
+        if pgv.ion_mode == "-":  
+            zsign = -1
+        else:
+            zsign = 1
+             
+        z = abs(spec.z)
+
+        mobs = spec.mz1*z - zsign * z * pgv.hmass  # m0 for mz1
+        print()
+        print("*******")
+        print("starting: ", ms2_key, spec.mz1, spec.z, zsign, z, mobs)
+        for end5 in pgv.frag_end5:
+            for end3 in pgv.frag_end3:
+                end5n = pgv.end_dict["end5"][end5]
+                end3n = pgv.end_dict["end3"][end3]
+                for label in pgv.isotopic_species:
+
+                    mobs_adj = mobs - (pgv.nt_fragment_dict[label][end5n].mass + pgv.nt_fragment_dict[label][end3n].mass)
+        
+                    seq_comps, offsets, ppm_tol, m0_tol, mz1_tol = find_compositions(mobs, mobs_adj, spec.mz1, z) # need to add label 
+                    print("Found ", len(seq_comps), " Compositions:")
+                    for comp in seq_comps:
+                        print("   ", comp)
+                    nperms = [number_permutations(seq_comp) for seq_comp in seq_comps]
+                    # print("m0 tolerance: ", ms2_key, ppm_tol, round(tol, 5), "# comps = ", len(seq_comps))
+                    # if len(seq_comps) > 25:
+                    #     print("TOO MANY COMPOSITIONS...Skip")
+                    #     continue                    # print(seq_comps)
+                    composition_dict[ms2_key] = {"n_comps": len(seq_comps), "seq_comps":seq_comps, "ppm_tol": ppm_tol, "m0_tol":m0_tol, "mz1_tol": mz1_tol, "nperms": nperms, "m0_offsets": offsets} # needed??? output separately?
+                    composition_dict[ms2_key]["prec_dict"] = {"mz1": spec.mz1, "z": spec.z, "m0": mobs, "end5": end5, "end3": end3, "end5_3": end5n, "end3_3": end3n, 
+                                  "label": label}
+          
+    return composition_dict
+
+
+
+
+def discover_spectra_parallel():
+    
+    build_mass_dict()
+    
+    ms2_ctr = 0
+    # master_match_dict = {}
+    ms2_file_list = []
+    
+    if __name__ == "__discovery__":
+        print("********MAIN*********")
+    else:
+        print("************ NOT MAIN ************")
+    # for ms2_key, spec in pgv.ms2_dict.items():  # discover_spectra() return master_match_dict
+    with multiprocessing.Pool() as pool:
+        # Apply the square function to each number in parallel
+        ms2_file_list = pool.map(discovery_fork, pgv.ms2_key_list)
+
+    # for ms2_key in pgv.ms2_key_list:  # discover_spectra() return master_match_dict
+
+
+    return ms2_file_list
+
+def discovery_fork(ms2_key):
+       spec = pgv.ms2_dict[ms2_key]
+       # if pgv.max_spectra != "all":
+       #    if ms2_ctr > int(pgv.max_spectra):
+       #        break
+       
+       # pgv.spec_dir = os.path.join(pgv.job_dir, "discovery_data_" + str(ms2_key))
+       # pgv.plot_dir = pgv.spec_dir
+       # Path(pgv.spec_dir).mkdir(parents=True, exist_ok=True)
+
+       # if ms2_ctr > 300:
+       #     break
+       ms2_ctr += 1
+       t1 = datetime.now()
+       cidx = 0 # composition index
+       master_composition_dict = {}
+       composition_dict = {}
+       if pgv.ion_mode == "-":  
+           zsign = -1
+       else:
+           zsign = 1
+            
+       z = abs(spec.z)
+
+       mobs = spec.mz1*z - zsign * z * pgv.hmass  # m0 for mz1
+       print()
+       print("*******")
+       print("starting: ", ms2_key, spec.mz1, spec.z, zsign, z, mobs)
+       for end5 in pgv.frag_end5:
+           for end3 in pgv.frag_end3:
+               end5n = pgv.end_dict["end5"][end5]
+               end3n = pgv.end_dict["end3"][end3]
+               for label in pgv.isotopic_species:
+
+                   mobs_adj = mobs - (pgv.nt_fragment_dict[label][end5n].mass + pgv.nt_fragment_dict[label][end3n].mass)
+       
+                   seq_comps, offsets, ppm_tol, tol, mz1_tol = find_compositions(mobs, mobs_adj, spec.mz1, z) # need to add label 
+                   print("Found ", len(seq_comps), " Compositions:")
+                   for comp in seq_comps:
+                       print("   ", comp)
+                   # print("m0 tolerance: ", ms2_key, ppm_tol, round(tol, 5), "# comps = ", len(seq_comps))
+                   if len(seq_comps) > 25:
+                       print("TOO MANY COMPOSITIONS...Skip")
+                       continue                    # print(seq_comps)
+                   composition_dict[ms2_key] = {"n_comps": len(seq_comps), "seq_comps":seq_comps, "ppm_tol": ppm_tol, "tol":tol} # needed??? output separately?
+                   composition_dict[ms2_key]["prec_dict"] = {"mz1": spec.mz1, "z": spec.z, "m0": mobs, "end5": end5, "end3": end3, "end5_3": end5n, "end3_3": end3n, 
+                                 "label": label}
+ 
+                   for seq_comp in seq_comps:  # match_composition() function
+                       nperms = number_permutations(seq_comp)
+                       # if nperms > pgv.max_permutations:
+                       if len(seq_comp) > 5:
+                           pgv.check_dfs_matching = 'y'
+                           print()
+                           print("using check_dfs on ms2_key ", ms2_key, " of length ", str(len(seq_comp)), "with", nperms, "permutations")
+                           print()
+                           # continue
+                       else:
+                           pgv.check_dfs_matching = 'y'
+                       f3 = fragment_sequence([end5n] + seq_comp + [end3n])
+                       precursor_dict, top_sort, top_keys, top_frags, top_match = match_permutations_dfs(f3, ms2_key, label, cidx, len(seq_comps))
+                       unpacked_precursor_dict = prune_precursor_dict(precursor_dict)
+                       # insert here:  polish permutations
+                       
+                       # maybe do Sp histogram first
+                       master_composition_dict[cidx] = unpacked_precursor_dict
+                       cidx += 1
+       
+       #TODO only save if there are matches
+       if len(master_composition_dict) > 0:
+           pgv.spec_dir = os.path.join(pgv.job_dir, "discovery_data_" + str(ms2_key))
+           pgv.plot_dir = pgv.spec_dir
+           Path(pgv.spec_dir).mkdir(parents=True, exist_ok=True)
+   
+           pickle_file = os.path.join(pgv.spec_dir, "discovery_" + str(ms2_key) + ".pkl")
+           ms2_file_list.append(pickle_file)
+           print("Saved: ", pickle_file)
+   
+           save_pickle(master_composition_dict, pickle_file)
+           
+           # print("master_composition_dict", master_composition_dict.keys())
+           # for key, mdict in master_composition_dict.items():
+           #     print(key,mdict.keys() )
+           # print(master_composition_dict)
+           discovery_file = "discovery_" + str(ms2_key)
+           # unpacked_discovery_dict = unpack_master_discovery_dict(master_composition_dict)
+           unpacked_discovery_dict = unpack_single_discovery_dict(ms2_key, master_composition_dict)
+           # print("unpacked_discovery_dict", unpacked_discovery_dict)
+           
+           # TODO fix this hack 
+           temp = pgv.job_dir
+           pgv.job_dir = pgv.spec_dir
+           output_match_dict_file(unpacked_discovery_dict, discovery_file)
+           pgv.job_dir = temp
+
+           print("spectrum ", ms2_key, " took ", datetime.now() - t1 )
+           print("*******")
+           print()
+           return pickle_file
 
 
 def prune_precursor_dict(precursor_dict):
@@ -1363,7 +1563,27 @@ def unpack_master_discovery_dict(master_match_dict):
             ukey += 1
     
     return unpacked_dict
- 
+
+    
+def unpack_single_discovery_dict(ms2_key, master_match_dict):
+    unpacked_dict = {}
+    ukey = 0
+    # for ms2_key, mdict in master_match_dict.items(): 
+    ms2_comp_dict = {}
+    ckey = 0
+    for cidx, cdict in master_match_dict.items(): # go thru each composition
+        for midx, match_dict in cdict.items(): # go thru each match
+            ms2_comp_dict[ckey] = {"ms2_key": ms2_key, "comp_index": cidx, "match_index": midx} # concatentate
+            ms2_comp_dict[ckey].update(match_dict)
+            ckey += 1
+            
+    ckeys_sorted = sorted(list(ms2_comp_dict.keys()), key = lambda x: ms2_comp_dict[x]['Sp'], reverse = True)
+    for ckey in ckeys_sorted[0:pgv.ntop]:
+        unpacked_dict[ukey] = copy.deepcopy(ms2_comp_dict[ckey])
+        ukey += 1
+    
+    return unpacked_dict
+
 # def evd_pdf(x,mu,sig):  # old Mathematica def....may be wrong
 #     return np.exp((mu-x)/sig) * np.exp(-np.exp((mu-x)/sig))/sig
 
@@ -1454,3 +1674,36 @@ def validate_discovery():
 #         target3 = ["IAM", "UNK", "KNO", "WN "]
 #     return target, target3
 
+
+def output_composition_dict(composition_dict):
+    base_list = []
+    for key in pgv.modification_set:
+        blist = pgv.set_dict[key]
+        base_list = base_list + blist
+        
+    nbases = len(base_list)
+    naturals = ["ADE", "CYT", "GUA", "URI"]
+    
+    column_list = ["ms2_key", "cidx", "offset", "nperms", "nmods"]  + base_list
+    df = pd.DataFrame(columns=column_list)
+    
+    idx = 0
+    for ms2_key, cdict in composition_dict.items():
+        cidx = 0
+        for sc, off, nperm in zip(cdict["seq_comps"], cdict["m0_offsets"], cdict["nperms"]):
+            nmods = 0
+            base_counts = np.zeros(len(base_list), dtype = int)
+            for base in sc:
+                if base not in naturals:
+                    nmods += 1
+                bidx = base_list.index(base)
+                base_counts[bidx] += 1
+                print(base, bidx)
+            ddict = {"ms2_key": ms2_key, "cidx": cidx, "offset": off, "nperms":nperm, "nmods": nmods}
+            print(base_counts)
+            ddict.update({k:v for k,v in zip(base_list, base_counts)})
+            df.loc[idx] = ddict
+            cidx += 1
+            idx += 1
+    
+    df.to_excel("/Users/jrwill/prog/Pytheas_Folder/Pytheas_Data/Met_tRNA_example/compositions.xlsx")

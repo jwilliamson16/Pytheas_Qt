@@ -21,11 +21,13 @@ from matplotlib.lines import Line2D
 
 from pytheas_global_vars import pgv, pgc
 from pytheas_objects import fragment_sequence, MS2_spectrum
-from digest_functions import generate_molecular_graph, generate_mod_seq
+from mod_seq_functions import generate_molecular_graph, generate_mod_seq, generate_mod_seq_ends
 from scoring_functions import (ppm_range, ppm_offset, sumI_all, sumI, n_calc, L_calc,
                                 consecutive_series)
 from worksheet_functions import format_worksheet_columns
-from ms2_plot import ms2_plot, labeled_matrix_plot
+from ms2_plot import ms2_plot
+from matrix_plot_functions import make_mod_text_dict, sequence_color, matrix_plot
+
 
 def match_spectra():
     ms2_ctr = 0
@@ -394,6 +396,7 @@ def rank_matches(prec_dict, top_n):
 def output_match_dict_file(match_dict, output_file): 
               
     formatted_dict = format_match_dict(match_dict)
+    # print("*****formatted_dict", formatted_dict)
 
     flist = []
     for ukey, udict in formatted_dict.items():
@@ -535,7 +538,7 @@ def reformat_theo_ions(ion_dict):
     ion_string = " ".join(ion_list)
     return ion_string
 
-def match_output_keys(udict):
+def match_output_keys(udict):   # UNUSED??
     for ukey in udict.keys():
         if len(list(udict[ukey].keys())) != 0:
             pgv.match_dict_keys = list(udict[ukey].keys())
@@ -669,77 +672,6 @@ def consolidated_match_output(unpacked_match_dict, output_file):
  
     return top_match_dict, seq_match_dict, match_dict
 
-def matrix_plot(color_matrix, row_labels, col_labels, text_dict, output_file):
-    
-    fs = 36  # fontsize for labels
-    pfont = 'Arial'
-    plt.rcParams.update({'font.size': fs, 'font.family': "sans-serif", "font.sans-serif": pfont})
-    plt.rcParams.update({'font.size': fs, 'font.family': "monospace", "font.sans-serif": pfont})
-    
-    fig, ax = plt.subplots(layout="constrained")  # plot internal coords are 1 unit/row-col
-
-    nr, nc, _ = color_matrix.shape
-    xsize = nc + 2*max([len(s) for s in row_labels]) *fs/72 + 1
-    ysize = nr + 2*max([len(s) for s in col_labels]) *fs/72 + 1
-    xscale = xsize
-    yscale = ysize
-    
-    if pgv.scale_matrix_plots == 'y':
-        xtarget = 8
-        ytarget = 11
-        xscale = xsize/xtarget
-        yscale = ysize/ytarget
-        xyscale = max(xscale, yscale, 1.0)
-    else:
-        xyscale = 1.0
-    
-    print("plot size: ", xsize/xyscale, ysize/xyscale, "scale", xyscale)
-    fig.set_size_inches(xsize/xyscale, ysize/xyscale) # absolute plot size for display in inches
-    plt.rcParams["figure.autolayout"] = True
-    plt.axis('off')
-    ax.set_aspect('equal')
-
-    labeled_matrix_plot(color_matrix, row_labels, col_labels, text_dict, fs, pgv.match_sequence_labels, xyscale, ax)
-   
-    fig_width, fig_height = plt.gcf().get_size_inches()
-    pdffile = os.path.join(pgv.job_dir, output_file + ".pdf")
-    fig.savefig(pdffile, format='pdf', dpi=300)
-
-    plt.close()
-
-def make_mod_text_dict(row_labels, col_labels, find_row, molecule, nc):
-    mod_text_dict = {} # text for modified positions
-    idx = 0 
-    for mod, mdict in pgv.mod_dict.items():
-        mpos = str(mdict["Position"])
-        mol = mdict["Molecule"]
-        if find_row:
-            col_idx = col_labels.index(mpos)
-            row_idx = row_labels.index(mol)
-        else:
-            if mol == molecule:
-                midx = mdict["Position"]
-                row_idx = math.floor((midx-1)/nc)
-                col_idx = midx - 100 * row_idx - 1
-            else:
-                continue
-
-        mbase = pgv.nt_def_dict[mdict["ID"]]["Pytheas_ID"]
-        mod_text_dict[idx] = {"row": row_idx, "col": col_idx, "text": mbase}
-        idx += 1
-    return mod_text_dict
-    
-def sequence_color(n_matches, seq):
-    col = pgc.dark_gray
-    if n_matches == 1 and seq in pgc.natural:
-        col = pgc.dark_blue
-    if n_matches > 1 and seq in pgc.natural:
-        col = pgc.light_blue
-    if n_matches == 1 and seq not in pgc.natural:
-        col = pgc.dark_green
-    if n_matches > 1 and seq not in pgc.natural:
-        col = pgc.light_green
-    return col
 
 def make_sequence_plot(output_file):
     
@@ -998,3 +930,51 @@ def top_Sp_histogram():
     
     plt.savefig(plot_folder)   
     plt.close(fig)                
+    
+def match_output_for_massacre():
+    
+  
+    top_match_df = pd.DataFrame.from_dict(pgv.top_match_dict, orient = "index")
+    
+    massacre_columns = ["pythid", "m/z", "RT", "MS1_offset(ppm)", "isotopologue_match",
+                        "length", "5\'-end", "Pytheas_sequence", "3\'-end",
+                        "charge", "isotope", "rank", "Score(Sp)", "dSp",
+                        "dSp2", "n", "L", "sequence_mods", "Massacre_sequence", 
+                        "molecule_ID", "molecule_location"]
+    
+    massacre_df = pd.DataFrame(columns = massacre_columns)
+    
+    top_match_columns = ["idx", "mz_exp", "rt", "offset", "topolog", "length", "end5", 
+                         "frag", "end3", "z", "label", "Sp_rank", "Sp", "dSp",
+                         "dSp2", "n", "L", "seq_mods", "mass_seq", "mol", 
+                         "seq_list"]
+    
+    
+    # need to preprocess a few columns
+    top_match_df["idx"] =  range(len(top_match_df))
+
+    top_match_df["mod_seq"] = [generate_mod_seq_ends(frag3) for frag3 in top_match_df["frag3"]]
+    top_match_df[["end5", "frag", "end3"]] = top_match_df["mod_seq"].str.split('_', expand=True)
+    
+    top_match_df["seq_mods"] = ["_" if "[" not in frag  else frag for frag in top_match_df["frag"]]
+    # top_match_df["mass_seq"] = [s if "[" not in frag else frag for frag, s in zip(top_match_df["frag"], top_match_df["seq_mods"])]
+    top_match_df["mass_seq"] =[ f.replace(",","") for f in top_match_df["frag"]]
+    
+    top_match_df["rt"] = top_match_df["rt"]/60.0 # massacre needs minutes
+    
+    # complete list of mols, separated by semicolons
+    top_match_df["mol"] = [";".join(list(set([seq.split(":")[0] for seq in seq_list]))) for seq_list in top_match_df["seq_list"]]
+    # seq_list separated by semicolons
+    top_match_df["seq_list"]  = [";".join([":".join(seq.split(":")[0:2]) for seq in seq_list]) for seq_list in top_match_df["seq_list"] ]    
+    
+
+    for old_col, new_col in zip(top_match_columns, massacre_columns):
+        massacre_df[new_col] = top_match_df[old_col]
+        
+    ms_root = pgv.MS_data_file.split(".")[0]
+    csv_file = os.path.join(pgv.job_dir, ms_root + "_massacre.csv")
+    pythid_file = os.path.join(pgv.job_dir, ms_root + ".pythid")
+    
+    massacre_df.to_csv(csv_file, index = False)
+    massacre_df.to_csv(pythid_file, index = False)
+    
