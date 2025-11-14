@@ -21,7 +21,11 @@ from pytheas_global_vars import pgv, pgc
 from pytheas_IO import read_pytheas_file
 from pytheas_objects import fragment_sequence
 from worksheet_functions import format_worksheet_columns
-from matrix_plot_functions import make_mod_text_dict, sequence_color, matrix_plot, make_seq_text_dict, make_long_text_dict, make_text_dict
+from matrix_plot_functions import (Labeled_Matrix, make_mod_text_dict, sequence_color, matrix_plot, 
+                                   make_seq_text_dict, make_long_text_dict, make_text_dict,
+                                   matrix_plot_new, pad_end3_gray_matrix, color_mods_matrix,
+                                   color_long_matrix_by_seq, pad_end3_gray, color_mods,
+                                   color_matrix_by_seq)
 from mod_seq_functions import (parse_mod_seq, generate_mod_seq, generate_mod_seq_ends,
                                parse_1_letter, generate_molecular_graph)
 
@@ -104,7 +108,7 @@ def unique_fragment(mol, end5, seq3, end3, fr, to, length, miss, ufdict, frag_se
     f3 = fragment_sequence(frag3) # object with 1-letter/3-letter seqs and ends
     full_mod_count = count_mods(frag3)
     
-    partial_key = mol + ":" + str(fr + 1) + "_" + str(to-1) + ":" + f3.frag
+    partial_key = mol + ":" + str(fr + 1) + "_" + str(to) + ":" + f3.frag
     partial = 0
     if pgv.partial_mods == 'y':
         frag3_list = []
@@ -427,7 +431,7 @@ def output_digest_file(output_file): # move to worksheet functions
    
     workbook.close()
 
-def make_digest_sequence_plot(output_file):
+def make_digest_plot(output_file):
     
     # determine matrix dimensions nr = n_seq, nc = max_seq_len
     max_seq_len = 0
@@ -439,31 +443,14 @@ def make_digest_sequence_plot(output_file):
 
     row_labels = [mol for mol in pgv.mol_dict.keys()]
     col_labels = [str(i+1) for i in range(max_seq_len)]
-   
-    color_matrix = np.asarray([[pgc.white_hsv for i in range(max_seq_len)] for j in range(n_seq)])
-    nr, nc, _ = color_matrix.shape
-
-    for mol, mdict in pgv.mol_dict.items(): # gray out entries with no sequence
-        slen = len(mdict["seq3"])
-        row_idx = row_labels.index(mol)
-        for i in range(slen, max_seq_len): # gray
-            color_matrix[row_idx,i] = pgc.dark_gray
     
-    # text labels for mods
-    # mod_text_dict = make_mod_text_dict(row_labels, col_labels, True, "", 100)
-    seq_text_dict = make_text_dict(row_labels, col_labels, 100)
-
-    # add modifications to sequence matrix as red...to be overwritten if matched
-    for key, mdict in pgv.mod_dict.items():
-        molecule = mdict["Molecule"]
-        idx = mdict["Position"]
-        if molecule in row_labels:
-            row_idx = row_labels.index(molecule)
-            col_idx = idx - 1
-            color_matrix[row_idx, col_idx] = pgc.red
+    lm = Labeled_Matrix(row_labels, col_labels)
+    pad_end3_gray(lm)
+    lm.text_dict = make_text_dict(row_labels, col_labels, 100)
+    color_mods(lm, pgc.red) # default color is red
+    cleavage_box = True
 
     for f, fdict in pgv.frag_dict.items():
-    # for m, mdict in pgv.match_dict.items():
         if fdict["frag_type"] != "target": # skip decoys
             continue
         seq_list = fdict["seq_list"]
@@ -473,52 +460,17 @@ def make_digest_sequence_plot(output_file):
         for seq in seq_list:
             mol, r, _ = seq.split(":")
             row_idx = row_labels.index(mol)
-            # if mol != molecule:
-            #     continue
-            
             fr, to = map(int,r.split("_"))   # these are sequence indices
-            seq3_idx = 0     
-            for idx in range(fr, to + 1):                    
-                # row_idx = math.floor((idx-1)/nc)
-                col_idx = idx - 1
-                color_matrix[row_idx, col_idx] = sequence_color(n_frags, seq3[seq3_idx])
-                seq3_idx += 1
-
-#TODO add light color for non-top match
-    # print("keys", pgv.unique_frag_dict.keys())
-    # for u, udict in pgv.unique_frag_dict.items():
-    #     # mol_list = udict["mol_list"].split(" ")
-    #     mol = udict["mol"]
-    #     full_length = len(pgv.mol_dict[mol]["seq3"])
-    #     # n_matches = len(mol_list)
-    #     seq3 = udict["frag3"][1:-1]
-    #     # if len(seq3) == full_length:
-    #     #     continue
-    #     # for mol_str in mol_list:
-    #     #     mol, r = mol_str.split(":")
-    #     if mol not in pgv.mol_dict:
-    #         continue
-    #     row_idx = row_labels.index(mol)
-    #     col_fr = udict["fr"]
-    #     col_to = udict["to"]
-    #     print(col_fr, col_to, mol, seq3)
-    #     # col_fr, col_to = map(int,r.split("_"))
-    #     seq3_idx = 0
-    #     for col_idx in range(col_fr, col_to):
-    #         # print(seq3, len(seq3) + 1, col_idx, seq3_idx)
-    #         if seq3_idx >= len(seq3):
-    #             # print("fragment too long", seq3, mol_str)
-    #             break
-    #         color_matrix[row_idx, col_idx] = sequence_color(1, seq3[seq3_idx])
-    #         seq3_idx += 1
-
-    matrix_plot(color_matrix, row_labels, col_labels, seq_text_dict, output_file)
-
-
-
-def make_long_digest_sequence_plot(output_file):
+            
+            print(row_idx, fr, to, seq3, n_frags )
+            color_matrix_by_seq(lm, row_idx, fr, to, seq3, n_frags, cleavage_box)
     
-    # plot long sequences as blocks of 100, one plot for each sequence
+    lm.output_file = output_file
+    lm.title = "Digest Plot for " + pgv.fasta_file
+    matrix_plot_new(lm)       
+ 
+def make_long_digest_plot(output_file):  # plot long sequences as blocks of 100, one plot for each sequence
+    
     nc = 100
     for molecule, mdict in pgv.mol_dict.items():
         slen = len(mdict["seq3"])
@@ -529,36 +481,14 @@ def make_long_digest_sequence_plot(output_file):
         row_labels = [molecule + "(" + str(100*row + 1) + ":" + str(100*(row + 1)) + ")"  for row in range(nr)]
         col_labels = [str(i+1) for i in range(nc)]
        
-        color_matrix = np.asarray([[pgc.white_hsv for i in range(nc)] for j in range(nr)])
-         
-        for row in range(nr): # gray out cells > length of seq
-            for col in range(nc):
-                idx = 100*row + col + 1
-                if idx > slen:
-                    color_matrix[row, col] = pgc.dark_gray # dark gray
-         
-        # add modifications to sequence matrix...to be overwritten if matched
-        for key, mdict in pgv.mod_dict.items():
-            if mdict["Molecule"] != molecule:
-                continue
-            idx = mdict["Position"]
-            row_idx = math.floor((idx-1)/nc)
-            col_idx = idx - 100 * row_idx - 1
-            color_matrix[row_idx,col_idx] = pgc.red
-
-        # text labels for mods
-        # mod_text_dict = make_mod_text_dict(row_labels, col_labels, False, molecule, nc)
-        # if pgv.base_labels_seq_map == "y":
-        #     seq_text_dict = make_seq_text_dict(row_labels, col_labels, False, molecule, nc)
-        # else:
-        #     seq_text_dict = {}
-        # seq_text_dict.update(mod_text_dict) # overwrite seq
+        lm = Labeled_Matrix(row_labels, col_labels) # matrix plot object
+        pad_end3_gray_matrix(lm, slen) # gray out boxes beyond 3'-end
+        color_mods_matrix(lm, molecule, pgc.red) # default color is red
+        lm.text_dict = make_long_text_dict(row_labels, col_labels, molecule, nc) # text dict with mods and optionally all bases
         
-        seq_text_dict = make_long_text_dict(row_labels, col_labels, molecule, nc)
+        cleavage_box = True  # make optional?
         
-        # fill out sequence matrix based on unique/multiple IDs
-        for f, fdict in pgv.frag_dict.items():
-        # for m, mdict in pgv.match_dict.items():
+        for f, fdict in pgv.frag_dict.items(): # go thru frag_dict
             if fdict["frag_type"] != "target": # skip decoys
                 continue
             seq_list = fdict["seq_list"]
@@ -570,13 +500,8 @@ def make_long_digest_sequence_plot(output_file):
                     continue
                 
                 fr, to = map(int,r.split("_"))   # these are sequence indices
-                seq3_idx = 0     
-                for idx in range(fr, to + 1):                    
-                    row_idx = math.floor((idx-1)/nc)
-                    col_idx = idx - 100 * row_idx - 1
-                    color_matrix[row_idx, col_idx] = sequence_color(n_frags, seq3[seq3_idx])
-                    seq3_idx += 1
+                color_long_matrix_by_seq(lm, fr, to, seq3, n_frags, cleavage_box)
 
-        output_mol_file = output_file + "_" + molecule
-        matrix_plot(color_matrix, row_labels, col_labels, seq_text_dict, output_mol_file)
-
+        lm.output_file = output_file + "_" + molecule
+        lm.title = "Digest Plot for " + molecule + " in " + pgv.fasta_file
+        matrix_plot_new(lm)

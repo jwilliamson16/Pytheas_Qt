@@ -26,7 +26,11 @@ from scoring_functions import (ppm_range, ppm_offset, sumI_all, sumI, n_calc, L_
                                 consecutive_series)
 from worksheet_functions import format_worksheet_columns
 from ms2_plot import ms2_plot
-from matrix_plot_functions import make_mod_text_dict, sequence_color, matrix_plot
+from matrix_plot_functions import (Labeled_Matrix, make_mod_text_dict, sequence_color, matrix_plot, 
+                                   make_seq_text_dict, make_long_text_dict, make_text_dict,
+                                   matrix_plot_new, pad_end3_gray_matrix, color_mods_matrix,
+                                   color_long_matrix_by_seq, pad_end3_gray, color_mods,
+                                   color_matrix_by_seq)
 
 
 def match_spectra():
@@ -112,11 +116,11 @@ def build_ion_series(m0, frag3, label):
      return ms2_ions_sorted
 
 #TODO reconcile with discovery next node
-def next_node(G, mtot, node, z2_list, m0, length): # slightly different than for discovery
+def next_node(G, mtot, node, z2_list, m0, length, label): # slightly different than for discovery
     nd = G.nodes[node] # node dict 
     base = nd["base"]
     grp = nd["group"]
-    mgrp = pgv.nt_fragment_dict["light"][base].mass_dict[grp]
+    mgrp = pgv.nt_fragment_dict[label][base].mass_dict[grp]
     # if "group_mass" not in nd:
     #     print("no group_mass", nd)
     #     mgrp_new = 0.0
@@ -181,7 +185,7 @@ def generate_ms2_ions(G, m0, label, seq3n):
     mtot = 0.0
     ion_idx = 0
     for node in G.nodes:
-        mtot, cid_ions = next_node(G, mtot, node, z2_list, m0, seq_len)
+        mtot, cid_ions = next_node(G, mtot, node, z2_list, m0, seq_len, label)
         for ion in cid_ions:
             ms2_ions[ion_idx] = ion
             ion_idx +=1
@@ -673,7 +677,7 @@ def consolidated_match_output(unpacked_match_dict, output_file):
     return top_match_dict, seq_match_dict, match_dict
 
 
-def make_sequence_plot(output_file):
+def make_match_plot(output_file):
     
     # determine matrix dimensions nr = n_seq, nc = max_seq_len
     max_seq_len = 0
@@ -681,36 +685,22 @@ def make_sequence_plot(output_file):
         slen = len(mdict["seq3"])
         if slen > max_seq_len:
             max_seq_len = slen
-    n_seq = len(list(pgv.mol_dict.keys()))
 
     row_labels = [mol for mol in pgv.mol_dict.keys()]
     col_labels = [str(i+1) for i in range(max_seq_len)]
    
-    color_matrix = np.asarray([[pgc.white_hsv for i in range(max_seq_len)] for j in range(n_seq)])
-    nr, nc, _ = color_matrix.shape
+    lm = Labeled_Matrix(row_labels, col_labels)
+    pad_end3_gray(lm)
+    lm.text_dict = make_text_dict(row_labels, col_labels, 100)
+    color_mods(lm, pgc.red) # default color is red
+    cleavage_box = True
 
-    for mol, mdict in pgv.mol_dict.items(): # gray out entries with no sequence
-        slen = len(mdict["seq3"])
-        row_idx = row_labels.index(mol)
-        for i in range(slen, max_seq_len): # gray
-            color_matrix[row_idx,i] = pgc.dark_gray
-    
-    # text labels for mods
-    mod_text_dict = make_mod_text_dict(row_labels, col_labels, True, "", 100)
-
-    # add modifications to sequence matrix as red...to be overwritten if matched
-    for key, mdict in pgv.mod_dict.items():
-        molecule = mdict["Molecule"]
-        idx = mdict["Position"]
-        if molecule in row_labels:
-            row_idx = row_labels.index(molecule)
-            col_idx = idx - 1
-            color_matrix[row_idx, col_idx] = pgc.red
-
-#TODO add light color for non-top match
     for m, mdict in pgv.match_dict.items():
+        if mdict["frag_type"] != "target":
+            continue
         mol_list = mdict["mol_list"].split(" ")
         n_matches = len(mol_list)
+        print(m,n_matches)
         seq3 = mdict["frag3"][1:-1]
         for mol_str in mol_list:
             mol, r = mol_str.split(":")
@@ -719,18 +709,15 @@ def make_sequence_plot(output_file):
             row_idx = row_labels.index(mol)
             
             col_fr, col_to = map(int,r.split("_"))
-            seq3_idx = 0
-            for col_idx in range(col_fr - 1, col_to):
-                # print(seq3, len(seq3) + 1, col_idx, seq3_idx)
-                if seq3_idx >= len(seq3):
-                    # print("fragment too long", seq3, mol_str)
-                    break
-                color_matrix[row_idx, col_idx] = sequence_color(n_matches, seq3[seq3_idx])
-                seq3_idx += 1
+            
+            color_matrix_by_seq(lm, row_idx, col_fr, col_to, seq3, n_matches, cleavage_box)
 
-    matrix_plot(color_matrix, row_labels, col_labels, mod_text_dict, output_file)
+    lm.title = "Match Plot for " + pgv.MS_data_file
+    lm.output_file = output_file
+    matrix_plot_new(lm)
+    # matrix_plot(color_matrix, row_labels, col_labels, seq_text_dict, output_file,lw_matrix)
     
-def make_long_sequence_plot(output_file):
+def make_long_match_plot(output_file):
     
     # plot long sequences as blocks of 100, one plot for each sequence
     nc = 100
@@ -742,29 +729,17 @@ def make_long_sequence_plot(output_file):
             
         row_labels = [molecule + "(" + str(100*row + 1) + ":" + str(100*(row + 1)) + ")"  for row in range(nr)]
         col_labels = [str(i+1) for i in range(nc)]
-       
-        color_matrix = np.asarray([[pgc.white_hsv for i in range(nc)] for j in range(nr)])
-         
-        for row in range(nr): # gray out cells > length of seq
-            for col in range(nc):
-                idx = 100*row + col + 1
-                if idx > slen:
-                    color_matrix[row, col] = pgc.dark_gray # dark gray
-         
-        # add modifications to sequence matrix...to be overwritten if matched
-        for key, mdict in pgv.mod_dict.items():
-            if mdict["Molecule"] != molecule:
-                continue
-            idx = mdict["Position"]
-            row_idx = math.floor((idx-1)/nc)
-            col_idx = idx - 100 * row_idx - 1
-            color_matrix[row_idx,col_idx] = pgc.red
 
-        # text labels for mods
-        mod_text_dict = make_mod_text_dict(row_labels, col_labels, False, molecule, nc)
+        lm = Labeled_Matrix(row_labels, col_labels) # matrix plot object
+        pad_end3_gray_matrix(lm, slen) # gray out boxes beyond 3'-end
+        color_mods_matrix(lm, molecule, pgc.red) # default color is red
+        lm.text_dict = make_long_text_dict(row_labels, col_labels, molecule, nc) # text dict with mods and optionally all bases
+        cleavage_box = True  # make optional?
         
         # fill out sequence matrix based on unique/multiple IDs
         for m, mdict in pgv.match_dict.items():
+            if mdict["frag_type"] != "target":
+                continue
             mol_list = mdict["mol_list"].split(" ")
             n_matches = len(mol_list)
             seq3 = mdict["frag3"][1:-1]
@@ -774,18 +749,12 @@ def make_long_sequence_plot(output_file):
                     continue
                 
                 fr, to = map(int,r.split("_"))   # these are sequence indices
-                seq3_idx = 0     
-                for idx in range(fr, to + 1):                    
-                    row_idx = math.floor((idx-1)/nc)
-                    col_idx = idx - 100 * row_idx - 1
-                    color_matrix[row_idx, col_idx] = sequence_color(n_matches, seq3[seq3_idx])
-                    seq3_idx += 1
+                color_long_matrix_by_seq(lm, fr, to, seq3, n_matches, cleavage_box)
 
-        output_mol_file = output_file + "_" + molecule
-        matrix_plot(color_matrix, row_labels, col_labels, mod_text_dict, output_mol_file)
-
-
-
+        lm.output_file  = output_file + "_" + molecule
+        lm.title = "Match plot for " + molecule + " in " + pgv.MS_data_file
+        matrix_plot_new(lm)
+  
 def iTRAQ_quantitation():
     rep_masses = [pgv.nt_fragment_dict["light"][tag].mass_dict["Reporter"] for tag in pgv.iTRAQ_tag_set]
 
@@ -958,7 +927,7 @@ def match_output_for_massacre():
     
     top_match_df["seq_mods"] = ["_" if "[" not in frag  else frag for frag in top_match_df["frag"]]
     # top_match_df["mass_seq"] = [s if "[" not in frag else frag for frag, s in zip(top_match_df["frag"], top_match_df["seq_mods"])]
-    top_match_df["mass_seq"] =[ f.replace(",","") for f in top_match_df["frag"]]
+    top_match_df["mass_seq"] =[ f.replace(",","") for f in top_match_df["frag"]] # remove commas from mods
     
     top_match_df["rt"] = top_match_df["rt"]/60.0 # massacre needs minutes
     
@@ -967,6 +936,7 @@ def match_output_for_massacre():
     # seq_list separated by semicolons
     top_match_df["seq_list"]  = [";".join([":".join(seq.split(":")[0:2]) for seq in seq_list]) for seq_list in top_match_df["seq_list"] ]    
     
+    top_match_df["topolog"] = [" " if t == 0 else "y" for t in top_match_df["topolog"]]
 
     for old_col, new_col in zip(top_match_columns, massacre_columns):
         massacre_df[new_col] = top_match_df[old_col]

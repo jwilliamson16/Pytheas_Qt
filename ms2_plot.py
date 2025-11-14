@@ -131,7 +131,7 @@ class PytheasImagePanel(QWidget):
         self.setLayout(self.panel_layout)
 
 
-def labeled_matrix_plot(hsv_data, row_labels, col_labels, text_dict, fs, labels, scale, ax):
+def labeled_matrix_plot(hsv_data, row_labels, col_labels, text_dict, fs, labels, scale, ax, lw_matrix):
     
     nr, nc, _ = hsv_data.shape
     colors = hsv_to_rgb(hsv_data)
@@ -157,6 +157,8 @@ def labeled_matrix_plot(hsv_data, row_labels, col_labels, text_dict, fs, labels,
             cs = col * col_sc
             ax.plot(cs, rs,'k ') # have to plot points, or ax has no dimension scaled #$^&*#$
             color = colors[row][col]
+
+            
             square = plt.Rectangle((cs, rs), xbox, ybox, facecolor = color,linewidth  = lws, edgecolor='black')
             ax.add_patch(square)
 
@@ -185,6 +187,15 @@ def labeled_matrix_plot(hsv_data, row_labels, col_labels, text_dict, fs, labels,
             fs_box = fs
         ax.text(cs + cctr,rs +rctr,td["text"], size = fs_box, ha = 'center', va = 'center')
 
+    # bold rectangles for cleavages
+    for row in range(nr):
+        rs = (nr-row-1) * row_sc # make rows go from top to bottom
+        for col in range(nc):
+            if lw_matrix[row,col] != 1:
+                cs = col * col_sc
+                lwx = lw_matrix[row,col]
+                square = plt.Rectangle((cs, rs), xbox, ybox, fill = False,linewidth  = lwx, edgecolor='black')
+                ax.add_patch(square)
 
 
 def series_name(m):

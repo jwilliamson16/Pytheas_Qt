@@ -16,8 +16,8 @@ from pytheas_global_vars import pgv, pgc
 from pytheas_IO import read_pytheas_file, save_json_files
 from match_functions import (match_spectra, unpack_match_dict, iTRAQ_quantitation, 
                                  output_match_dict_file, match_output_keys, 
-                                 consolidated_match_output, make_sequence_plot, 
-                                 make_long_sequence_plot, plot_ms2_spectra)
+                                 consolidated_match_output, make_match_plot, 
+                                 make_long_match_plot, plot_ms2_spectra)
 
 from match_functions import ppm_offset_plot,top_Sp_histogram, match_output_for_massacre
 
@@ -59,11 +59,12 @@ def match():
         pgv.widget_dict["consolidated_match_output"].load_value("consolidated_match" + match_job + ".xlsx")
 
     if pgv.plot_sequence_map == 'y':
+        print("plotting match map")
         max_seq_len = max([len(mdict["seq3"]) for mdict in pgv.mol_dict.values()])
         if max_seq_len < 100:
-            make_sequence_plot("match_sequence_map" + match_job) 
+            make_match_plot("match_sequence_map" + match_job) 
         else:
-            make_long_sequence_plot("match_sequence_map" + match_job)
+            make_long_match_plot("match_sequence_map" + match_job)
         
     if pgv.output_match_json == "y":  # write out json files 
         json_dir = os.path.join(pgv.job_dir, "pytheas_json_files")

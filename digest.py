@@ -15,7 +15,7 @@ from pathlib import Path
 from pytheas_global_vars import pgv, pgc
 from digest_functions import (add_modifications, enzyme_digest, add_precursor_ions,
                             build_frag_dict, build_precursor_dict,  output_digest_file,
-                            make_digest_sequence_plot, make_long_digest_sequence_plot)
+                            make_digest_plot, make_long_digest_plot)
 from pytheas_IO import read_pytheas_file, save_json_files
 
 def digest():
@@ -82,9 +82,9 @@ def digest():
     if pgv.plot_digest_map == 'y':
         max_seq_len = max([len(mdict["seq3"]) for mdict in pgv.mol_dict.values()])
         if max_seq_len < 100:
-            make_digest_sequence_plot("digest_sequence_map" + digest_job) 
+            make_digest_plot("digest_sequence_map_" + digest_job) 
         else:
-            make_long_digest_sequence_plot("digest_sequence_map" + digest_job)
+            make_long_digest_plot("digest_sequence_map" + digest_job)
             
     
     if pgv.run == "CL":

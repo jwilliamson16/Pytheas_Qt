@@ -1,0 +1,107 @@
+1-methyladenosine 1MA (1EHZ) tRNA
+2-methylthio- N6-hydroxynorvalyl carbamoyladenosine 26A tRNA
+2-methyladenosine 2MA 1EFW tRNA
+2′-O-ribosylphosphate adenosine 2RA 1YFZ tRNA
+N6-methyl-N6-threonylcarbamoyladenosine 66A tRNA
+N6-acetyladenosine 6AA tRNA
+N6-glycinylcarbamoyladenosine 6GA tRNA
+N6-isopentenyladenosine 6IA tRNA
+N6-methyladenosine 6MA tRNA
+N6-threonylcarbamoyladenosine 6TA tRNA
+N6,N6-dimethyladenosine DMA M2A 16S rRNA
+N6-(cis-hydroxyisopentenyl)adenosine HIA tRNA
+N6-hydroxynorvalylcarbamoyladenosine HNA tRNA
+1,2′-O-dimethyladenosine M2A tRNA
+N6,2′-O-dimethyladenosine MMA
+2′-O-methyladenosine MRA A2M tRNA
+N6,N6,O-2′-trimethyladenosine MTA
+2-methylthio- N6-(cis-hydroxyisopentenyl) adenosine SIA tRNA
+2-methylthio- N6-methyladenosine SMA tRNA
+2-methylthio- N6-isopentenyladenosine SPA MIA 1B23 tRNA
+2-methylthio- N6-threonyl carbamoyladenosine STA 12A 1FIR tRNA
+2-thiocytidine 2SC tRNA
+3-methylcytidine 3MC 3MCT tRNA
+N4-acetylcytidine 4AC tRNA,rRNA
+N4-methylcytidine 4MC
+5-formylcytidine 5FC tRNA
+5-methylcytidine 5MC 1EHZ tRNA,16S rRNA
+5-hydroxymethylcytidine HMC
+lysidine K2C tRNA
+N4-acetyl-2 ′-O-methylcytidine MAC tRNA,rRNA
+5-formyl-2 ′-O-methylcytidine MFC tRNA
+5,2′-O-dimethylcytidine MMC tRNA
+2′-O-methylcytidine MRC OMC 1EHZ tRNA
+N4,2′-O-dimethylcytidine M4C rRNA
+N4,N4,2′-O-trimethylcytidine MTC rRNA
+1-methylguanosine 1MG 2ASY tRNA
+N2,7-dimethylguanosine 27G
+N2-methylguanosine 2MG 1EHZ tRNA,rRNA
+2′-O-ribosylphosphate guanosine 2RG tRNA
+7-methylguanosine 7MG G7M 1EHZ tRNA,rRNA
+under modified hydroxywybutosine BUG UBG tRNA
+7-aminomethyl-7-deazaguanosine DAG 1EFZ tRNA
+7-cyano-7-deazaguanosine DCG tRNA
+N2,N2-dimethylguanosine DMG M2G (1EHZ) tRNA
+4-demethylwyosine DWG tRNA
+epoxyqueuosine EQG tRNA
+hydroxywybutosine HWG tRNA
+isowyosine IWG tRNA
+N2,7,2′-O-trimethylguanosine M7G tRNA
+N2,2′-O-dimethylguanosine MMG tRNA
+1,2′-O-dimethylguanosine M1G tRNA
+2′-O-methylguanosine MRG OMG 1EHZ tRNA
+N2,N2,2′-O-trimethylguanosine MTG tRNA
+N2,N2,7-trimethylguanosine N2G
+peroxywybutosine PBG tRNA
+galactosyl-queuosine QGG tRNA
+mannosyl-queuosine QMG tRNA
+queuosine QUG QUO tRNA
+archaeosine RCG tRNA
+wybutosine WBG YG 1EHZ tRNA
+methylwyosine WMG tRNA
+wyosine WYG tRNA
+2-thiouridine 2SU SUR tRNA
+3-(3-amino-3-carboxypropyl)uridine 3AU tRNA
+3-methyluridine 3MU rRNA
+4-thiouridine 4SU S4U 1B23 tRNA
+5-methyl-2-thiouridine 52U tRNA
+5-methylaminomethyluridine 5AU tRNA
+5-carboxymethyluridine 5CU
+5-carboxymethylaminomethyluridine 5DU tRNA
+5-hydroxyuridine 5HU tRNA
+5-methyluridine 5MU 1EHZ tRNA
+5-taurinomethyluridine 5TU tRNA
+5-carbamoylmethyluridine BCU tRNA
+5-(carboxyhydroxymethyl)uridine methyl ester CMU tRNA
+dihydrouridine DHU H2U 1EHZ tRNA
+5-methyldihydrouridine DMU
+5-methylaminomethyl-2-thiouridine ESU tRNA
+5-(carboxyhydroxymethyl)uridine HCU tRNA
+5-(isopentenylaminomethyl)uridine IAU tRNA
+5-(isopentenylaminomethyl)-2-thiouridine ISU tRNA
+3,2′-O-dimethyluridine M3U
+5-carboxymethylaminomethyl-2 ′-O-methyluridine MAU tRNA
+5-carbamoylmethyl-2 ′-O-methyluridine MCU tRNA
+5-methoxycarbonylmethyl-2 ′-O-methyluridine MEU tRNA
+5-(isopentenylaminomethyl)-2 ′-O-methyluridine MIU tRNA
+5,2′-O-dimethyluridine MMU 2MU 1FIR tRNA
+2′-O-methyluridine MRU tRNA
+2-thio-2′-O-methyluridine MSU tRNA
+uridine 5-oxyacetic acid OAU tRNA
+5-methoxycarbonylmethyluridine OCU tRNA
+uridine 5-oxyacetic acid methyl ester OEU tRNA
+5-methoxyuridine OMU tRNA
+5-aminomethyl-2-thiouridine SAU tRNA
+5-carboxymethylaminomethyl-2-thiouridine SCU tRNA
+5-methylaminomethyl-2-selenouridine SEU tRNA
+5-methoxycarbonylmethyl-2-thiouridine SMU tRNA
+5-taurinomethyl-2-thiouridine STU tRNA
+pseudouridine PSU 1EHZ tRNA,rRNA
+1-methyl-3-(3-amino-3-carboxypropyl)pseudouridine 13P 28S rRNA
+1-methylpseudouridine 1MP tRNA
+3-methylpseudouridine 3MP 23S rRNA
+2′-O-methylpseudouridine MRP tRNA
+inosine INO tRNA
+1-methylinosine 1MI tRNA
+1,2′-O-dimethylinosine MMI tRNA
+2'-O-methylinosine MRI
