@@ -103,6 +103,7 @@ def Load_Globals_File(file_path):
 
 def Load_Global_Vars(): # button fuction
 
+    # recent_parameters = "pytheas_recent_parameters.xlsx"
     ppar_file = os.path.join(pgv.working_dir, pgv.pytheas_parameters_save)
 
     print("Loading Parameters from ", ppar_file)
@@ -141,7 +142,8 @@ def Load_Previous_Globals(): # button function
     # pgv.pytheas_parameters_save = default
 
 def Save_Global_Variables(): # button function
-    path_list = [pgv.pytheas_parameters_save]
+    # path_list = [pgv.pytheas_parameters_save]
+    path_list = ["pytheas_recent_parameters.xlsx"]
     print("save file", path_list)
     Save_Globals_File(path_list)
 
@@ -236,6 +238,11 @@ def SaveRunParameters(module, next_dir):
     if pgv.run == "CL":
         pgv.widget_dict["pytheas_parameters_save"].load_value(par_file) # apparently save file name to itself
     Save_Globals_File(path_list)
+    
+    par_file = "pytheas_recent_parameters.xlsx"
+    path_list = [pgv.working_dir, par_file]
+    Save_Globals_File(path_list)
+
 
 def inSilicoDigest():  # main pytheas module
     logger, next_dir = setup_job_dir("Digest")
@@ -318,27 +325,6 @@ def Discovery():
 #         print(ms2_key, "max_int", mdict.max_int, "# ms2", len(list(mdict.ms2.keys())))
 
 
-# def Development():
-#     print("Under construction")
-#     pass
-
-
- 
-    
-# def CommandLineRun(args):
-#     Load_Global_Vars()
-#     if "in_silico_digest" in args or "all" in args:
-#         inSilicoDigest()
-#     if "matching" in args or "all" in args:
-#         matchSpectra()
-#     if "statistics" in args or "all" in args:
-#         statistics()
-#     if "final_report" in args or "all" in args:
-#         report()
-#     if "visualizationt" in args or "all" in args:
-#         visualization()
-#     sys.exit()
-
       
 # def Print_Match_Keys():
 #     try:
@@ -364,15 +350,16 @@ def Discovery():
 
 # Handle command line arguments
 
-# parser = argparse.ArgumentParser("Pytheas_tk")
+parser = argparse.ArgumentParser("Pytheas_Qt")
 # parser.add_argument("--screen_scale", dest = "screen_scale", type=float, help="enforce a relative screen scale as a refuge for those with a truly small monitor. range (0.5 to 2.0)")
-# parser.add_argument("--load_vars", action = 'store_true',  help = "load saved parameters in pytheas_parameters.xlsx upon execution")
+parser.add_argument("--load_vars",  action='store_true')
 # parser.add_argument("--print_sys_info", action = 'store_true', help = "print info about os and screen dimensions")
+parser.add_argument("--digest", action = 'store_true')
+parser.add_argument("--match", action = 'store_true')
+parser.add_argument("--nogui", action = 'store_true')
 
-# clargs = parser.parse_args()
-# # print("arguments = ", clargs)
-# # print("args.screen_scale", clargs.screen_scale)
-# # print("args.load_vars", clargs.load_vars)
+clargs = parser.parse_args()
+print("arguments = ", clargs)
 
 # valid_args = ['nogui', 'load_vars', 'screen_scale', 'all', 'in_silico_digest', 'matching', 'statistics', 'final_report', 'visualization']
 
@@ -388,14 +375,17 @@ def build_Pytheas_gui():
     label_file_list = [] # heavy/light files
 
     for key, pdict in pgvdict.items(): # extract info for each panel
-
+    
+        if pdict["hide"] == "hide":
+            continue
+    
         if "option_group" in pdict:
             og = pdict["option_group"]
             wg = pdict["widget_group"]
             if og not in pgv.option_dict.keys():
                 pgv.option_dict[og] = [] # preserves input order
             pgv.option_dict[og].append(key)
-
+    
             if pgvdict[key]["option_group"] == "input_files" and pgvdict[key]["widget_type"] != "PytheasLabel":
                 std_file_list.append(key)
             if "rna_mod_defs" in key:   # label files have to be read last
@@ -450,10 +440,10 @@ def build_Pytheas_gui():
             
     # add module buttons
     
-    button_dict = {"Global Variables:": {"Load Global Variables": Load_Global_Vars,
-                                         "Load Previous Globals": Load_Previous_Globals,
-                                         "List Global Variables": Print_Global_Vars,
-                                         "Save Global Variables": Save_Global_Variables                                     
+    button_dict = {"Global Variables:": {"Load Last Globals": Load_Global_Vars,
+                                         "Choose Previous Globals": Load_Previous_Globals,
+                                         "List Globals": Print_Global_Vars,
+                                         "Save Globals": Save_Global_Variables                                     
                                           },
                    "Pytheas Modules: ": {"In Silico Digest": inSilicoDigest,
                                          "Match Spectra": matchSpectra, 
@@ -499,11 +489,9 @@ def build_Pytheas_gui():
 # main_window.move(x, y)
 
 
-# if clargs.load_vars:
-#     Load_Global_Vars()
-# print("Pytheas ready to Go!")
-
 main_window, app = build_Pytheas_gui()
+
+# crude hack to allow development in Spyder
 
 try:
     run_mode = get_ipython().__class__.__name__
@@ -512,24 +500,32 @@ except:
     print("command_line_arguments: ", sys.argv)
 
 if run_mode == 'SpyderShell':
-
     print("This program is running inside Spyder") 
     pgv.run = "Spyder"
-    # build_Pytheas_gui()
 else:
     print("This program is running on command line")
     pgv.run = "CL"
-    # pgv.run = "CL"
-    # if __name__ == "__main__":
-    print("launching Pytheas app...")
-    if "--nogui" not in sys.argv:
-        main_window.show()
+
+
+# handle command line args and launch app
+      
+print("launching Pytheas...")
+
+if clargs.load_vars:
+    Load_Global_Vars()
+ 
+if clargs.digest:
+    inSilicoDigest()
+    
+if clargs.match:
+    matchSpectra()
+    
+if clargs.nogui:
+    pass
+else:
+    if pgv.run == "CL":
         app.exec()
-    else:
-        print("no GUI, running command line...")
-    # else:
-    #     Load_Global_Vars()
-    #     inSilicoDigest()
+        print("Pytheas ready to Go!")
         
         
 

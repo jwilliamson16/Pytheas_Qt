@@ -1,0 +1,83 @@
+interfaces = []
+exclude = [
+    "**/*__pycache__",
+    "**/*egg-info",
+    "**/docs",
+    "**/tests",
+    "**/venv",
+]
+source_roots = [
+    ".",
+]
+
+[[modules ]]
+path = "pytheas_discovery_dev"
+depends_on = []
+
+[[modules ]]
+path = "pytheas_data"
+depends_on = []
+
+[[modules ]]
+path = "ms2_plot"
+depends_on = ["mod_seq_functions", "pytheas_global_vars"]
+
+[[modules ]]
+path = "pytheas_IO"
+depends_on = ["Pytheas_Qt_widgets", "pytheas_global_vars", "pytheas_objects"]
+
+[[modules ]]
+path = "worksheet_functions"
+depends_on = ["pytheas_global_vars"]
+
+[[modules ]]
+path = "pytheas_objects"
+depends_on = ["pytheas_global_vars"]
+
+[[modules ]]
+path = "discovery"
+depends_on = ["pytheas_global_vars", "discovery_functions", "pytheas_IO", "match_functions"]
+
+[[modules ]]
+path = "matrix_plot_functions"
+depends_on = ["pytheas_global_vars", "ms2_plot"]
+
+[[modules ]]
+path = "Pytheas_Qt_widgets"
+depends_on = ["pytheas_global_vars"]
+
+[[modules ]]
+path = "mod_seq_functions"
+depends_on = ["pytheas_global_vars"]
+
+[[modules ]]
+path = "digest"
+depends_on = ["digest_functions", "pytheas_global_vars", "pytheas_IO"]
+
+[[modules ]]
+path = "scoring_functions"
+depends_on = ["pytheas_global_vars"]
+
+[[modules ]]
+path = "match"
+depends_on = ["match_functions", "pytheas_global_vars", "pytheas_IO"]
+
+[[modules ]]
+path = "pytheas_Qt"
+depends_on = ["pytheas_IO", "pytheas_global_vars", "worksheet_functions", "discovery", "match_functions", "Pytheas_Qt_widgets", "digest", "match"]
+
+[[modules ]]
+path = "digest_functions"
+depends_on = ["pytheas_IO", "worksheet_functions", "pytheas_global_vars", "pytheas_objects", "matrix_plot_functions", "mod_seq_functions"]
+
+[[modules ]]
+path = "match_functions"
+depends_on = ["mod_seq_functions", "scoring_functions", "ms2_plot", "worksheet_functions", "pytheas_global_vars", "pytheas_objects", "matrix_plot_functions"]
+
+[[modules ]]
+path = "discovery_functions"
+depends_on = ["pytheas_IO", "pytheas_global_vars", "match_functions", "digest_functions", "scoring_functions", "pytheas_objects"]
+
+[[modules ]]
+path = "pytheas_global_vars"
+depends_on = []

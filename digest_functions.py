@@ -42,7 +42,7 @@ def add_modifications(): # parse raw fasta seq and add modifications
         else:
             sdict["seq3"] = parse_mod_seq(sdict["raw_seq"])  # parse mods in brackets from fasta
             mol.seq3 = parse_mod_seq(mol.seq3)
-    pickle.dump(pgv.molecule_dict, open(os.path.join(pgv.job_dir, "molecule_2+dict.pkl"), "wb" ))
+    # pickle.dump(pgv.molecule_dict, open(os.path.join(pgv.job_dir, "molecule_2+dict.pkl"), "wb" ))
             
     if pgv.rna_mods == 'modfile':  # read modifications in from mod def file
     
@@ -439,7 +439,7 @@ def make_digest_plot(output_file):
         slen = len(mdict["seq3"])
         if slen > max_seq_len:
             max_seq_len = slen
-    n_seq = len(list(pgv.mol_dict.keys()))
+    # n_seq = len(list(pgv.mol_dict.keys()))
 
     row_labels = [mol for mol in pgv.mol_dict.keys()]
     col_labels = [str(i+1) for i in range(max_seq_len)]
@@ -459,11 +459,12 @@ def make_digest_plot(output_file):
         print("frag", f, seq_list)
         for seq in seq_list:
             mol, r, _ = seq.split(":")
+            length = len(pgv.mol_dict[mol]["raw_seq"])
             row_idx = row_labels.index(mol)
             fr, to = map(int,r.split("_"))   # these are sequence indices
             
             print(row_idx, fr, to, seq3, n_frags )
-            color_matrix_by_seq(lm, row_idx, fr, to, seq3, n_frags, cleavage_box)
+            color_matrix_by_seq(lm, row_idx, fr, to, seq3, n_frags, length, cleavage_box)
     
     lm.output_file = output_file
     lm.title = "Digest Plot for " + pgv.fasta_file
@@ -496,11 +497,13 @@ def make_long_digest_plot(output_file):  # plot long sequences as blocks of 100,
             seq3 = fdict["frag3"][1:-1]
             for seq in seq_list:
                 mol, r, _ = seq.split(":")
+                length = len(pgv.mol_dict[mol]["raw_seq"])
+
                 if mol != molecule:
                     continue
                 
                 fr, to = map(int,r.split("_"))   # these are sequence indices
-                color_long_matrix_by_seq(lm, fr, to, seq3, n_frags, cleavage_box)
+                color_long_matrix_by_seq(lm, fr, to, seq3, n_frags, length, cleavage_box)
 
         lm.output_file = output_file + "_" + molecule
         lm.title = "Digest Plot for " + molecule + " in " + pgv.fasta_file

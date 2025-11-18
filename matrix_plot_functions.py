@@ -33,6 +33,7 @@ def labeled_matrix_plot_new(lm, fs, labels, scale, ax):
     # nr, nc, _ = hsv_data.shape
     # colors = hsv_to_rgb(hsv_data)
     
+    scale = 1/scale
     col_sc = scale # column scale (width)
     row_sc = scale        # row scale (height)
     nrs = lm.nr * row_sc
@@ -44,7 +45,7 @@ def labeled_matrix_plot_new(lm, fs, labels, scale, ax):
     coff = 0.1 * col_sc
     xbox = col_sc
     ybox = row_sc
-    fss = fs * 0.75
+    fss = fs * 0.75 * scale
     lws = 1 * scale
     
     # draw color grid
@@ -77,9 +78,10 @@ def labeled_matrix_plot_new(lm, fs, labels, scale, ax):
         rs = (lm.nr - td["row"] - 1) * row_sc
         cs = td["col"] * col_sc
         if len(td["text"]) > 3:
-            fs_box = fs/2
+            fs_box = scale * fs/2
         else:
-            fs_box = fs
+            fs_box = scale * fs
+        
         ax.text(cs + cctr,rs +rctr,td["text"], size = fs_box, ha = 'center', va = 'center')
 
     # bold rectangles for cleavages
@@ -88,7 +90,7 @@ def labeled_matrix_plot_new(lm, fs, labels, scale, ax):
         for col in range(lm.nc):
             if lm.lw_matrix[row,col] != 1:
                 cs = col * col_sc
-                lwx = lm.lw_matrix[row,col]
+                lwx = lm.lw_matrix[row,col] * scale
                 square = plt.Rectangle((cs, rs), xbox, ybox, fill = False,linewidth  = lwx, edgecolor='black')
                 ax.add_patch(square)
 
@@ -129,13 +131,13 @@ def matrix_plot_new(lm):
 
     labeled_matrix_plot_new(lm, fs, pgv.match_sequence_labels, xyscale, ax)
     
-    plt.title(lm.title)
+    plt.title(lm.title, fontsize = fs / xyscale)
    
     fig_width, fig_height = plt.gcf().get_size_inches()
     pdffile = os.path.join(pgv.job_dir, lm.output_file + ".pdf")
     fig.savefig(pdffile, format='pdf', dpi=300)
-    pdffile = os.path.join(pgv.job_dir, lm.output_file + ".png")
-    fig.savefig(pdffile, format='png', dpi=300)
+    # pdffile = os.path.join(pgv.job_dir, lm.output_file + ".png")
+    # fig.savefig(pdffile, format='png', dpi=300)
 
     plt.close()
 
@@ -296,6 +298,7 @@ def sequence_color(n_matches, seq):
         col = pgc.dark_green
     if n_matches > 1 and seq not in pgc.natural:
         col = pgc.light_green
+    print(n_matches, seq, col)
     return col
 
 def pad_end3_gray_matrix(lm, slen):
@@ -332,18 +335,18 @@ def color_mods(lm, color):
             col_idx = idx - 1
             lm.color_matrix[row_idx, col_idx] = color
 
-def color_matrix_by_seq(lm, row_idx, fr, to, seq3, n_frags, cleavage_box):
-    seq3_idx = 0     
-    for idx in range(fr - 1, to ):                    
-        col_idx = idx - 1
+def color_matrix_by_seq(lm, row_idx, fr, to, seq3, n_frags, length, cleavage_box):
+    seq3_idx = 0     # sequence index within fragment
+    for idx in range(fr - 1, to ):    # index in molecule                
+        col_idx = idx
         print(idx)
         lm.color_matrix[row_idx, col_idx] = sequence_color(n_frags, seq3[seq3_idx])
         seq3_idx += 1
-        if cleavage_box and idx == to and idx != len(seq3):
+        if cleavage_box and idx == to - 1 and idx != length - 1:
             lm.lw_matrix[row_idx, col_idx] = 7
 
 
-def color_long_matrix_by_seq(lm, fr, to, seq3, n_frags, cleavage_box):
+def color_long_matrix_by_seq(lm, fr, to, seq3, n_frags, length, cleavage_box):
     seq3_idx = 0     
     for idx in range(fr, to + 1):                    
         row_idx = math.floor((idx-1)/lm.nc)

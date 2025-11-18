@@ -253,11 +253,12 @@ def matching_ms2(ms2_key, spec, prec_dict):
         precursor["mz_exp"] = pgv.ms2_dict[ms2_key].mz1
         
         offsets = [(precursor["mz_exp"] + float(t) * pgc.neutron_mass/precursor["z"]  - precursor["mz1"])/precursor["mz_exp"] for t in pgv.precursor_isotopologue_list]
+        print([[t,o] for t,o in zip(pgv.precursor_isotopologue_list, offsets)])
         abs_offset = [abs(o) for o in offsets]
         min_idx =abs_offset.index(min(abs_offset))
         
         precursor["offset"] = 1000000.0* offsets[min_idx]
-        precursor["topolog"] = min_idx
+        precursor["topolog"] = pgv.precursor_isotopologue_list[min_idx]
         
 def rename_matched_ions(precursor, match_dict):
     f3 = fragment_sequence(precursor["frag3"])
@@ -700,22 +701,23 @@ def make_match_plot(output_file):
             continue
         mol_list = mdict["mol_list"].split(" ")
         n_matches = len(mol_list)
-        print(m,n_matches)
+        # print(m,n_matches)
         seq3 = mdict["frag3"][1:-1]
         for mol_str in mol_list:
             mol, r = mol_str.split(":")
+            length = len(pgv.mol_dict[mol]["raw_seq"])
+
             if mol not in pgv.mol_dict:
                 continue
             row_idx = row_labels.index(mol)
             
             col_fr, col_to = map(int,r.split("_"))
             
-            color_matrix_by_seq(lm, row_idx, col_fr, col_to, seq3, n_matches, cleavage_box)
+            color_matrix_by_seq(lm, row_idx, col_fr, col_to, seq3, n_matches, length, cleavage_box)
 
     lm.title = "Match Plot for " + pgv.MS_data_file
     lm.output_file = output_file
-    matrix_plot_new(lm)
-    # matrix_plot(color_matrix, row_labels, col_labels, seq_text_dict, output_file,lw_matrix)
+    matrix_plot_new(lm)    # matrix_plot(color_matrix, row_labels, col_labels, seq_text_dict, output_file,lw_matrix)
     
 def make_long_match_plot(output_file):
     
@@ -745,11 +747,13 @@ def make_long_match_plot(output_file):
             seq3 = mdict["frag3"][1:-1]
             for mol_str in mol_list:
                 mol, r = mol_str.split(":")
+                length = len(pgv.mol_dict[mol]["raw_seq"])
+
                 if mol != molecule:
                     continue
                 
                 fr, to = map(int,r.split("_"))   # these are sequence indices
-                color_long_matrix_by_seq(lm, fr, to, seq3, n_matches, cleavage_box)
+                color_long_matrix_by_seq(lm, fr, to, seq3, n_matches, length, cleavage_box)
 
         lm.output_file  = output_file + "_" + molecule
         lm.title = "Match plot for " + molecule + " in " + pgv.MS_data_file
@@ -925,10 +929,12 @@ def match_output_for_massacre():
     top_match_df["mod_seq"] = [generate_mod_seq_ends(frag3) for frag3 in top_match_df["frag3"]]
     top_match_df[["end5", "frag", "end3"]] = top_match_df["mod_seq"].str.split('_', expand=True)
     
+    top_match_df["frag"] =[ f.replace(",","") for f in top_match_df["frag"]] # remove commas from mods
     top_match_df["seq_mods"] = ["_" if "[" not in frag  else frag for frag in top_match_df["frag"]]
     # top_match_df["mass_seq"] = [s if "[" not in frag else frag for frag, s in zip(top_match_df["frag"], top_match_df["seq_mods"])]
-    top_match_df["mass_seq"] =[ f.replace(",","") for f in top_match_df["frag"]] # remove commas from mods
     
+    top_match_df["mass_seq"] =[ f for f in top_match_df["frag"]] # remove commas from mods
+   
     top_match_df["rt"] = top_match_df["rt"]/60.0 # massacre needs minutes
     
     # complete list of mols, separated by semicolons
@@ -936,7 +942,7 @@ def match_output_for_massacre():
     # seq_list separated by semicolons
     top_match_df["seq_list"]  = [";".join([":".join(seq.split(":")[0:2]) for seq in seq_list]) for seq_list in top_match_df["seq_list"] ]    
     
-    top_match_df["topolog"] = [" " if t == 0 else "y" for t in top_match_df["topolog"]]
+    top_match_df["topolog"] = [" " if t == '0' else "y" for t in top_match_df["topolog"]]
 
     for old_col, new_col in zip(top_match_columns, massacre_columns):
         massacre_df[new_col] = top_match_df[old_col]
