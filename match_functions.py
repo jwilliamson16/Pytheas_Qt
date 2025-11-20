@@ -785,8 +785,8 @@ def plot_ms2_spectra():
     
     ctr = 0
     for mkey, mdict in pgv.match_dict.items():
-        if ctr > 0:
-            break
+        # if ctr > 0:
+        #     break
         ctr += 1
         ukey = mdict["ukey"]
         print("ms_plot: ", ukey, generate_mod_seq(pgv.unpacked_match_dict[ukey]["frag3"]))

@@ -24,8 +24,11 @@ from PyQt5.QtGui import QPixmap, QImage
 from PyQt5.QtCore import Qt
 
 
+
 from pytheas_global_vars import  pgv, pgc
 from mod_seq_functions import generate_mod_seq
+
+from matrix_plot_functions import Labeled_Matrix, labeled_matrix_plot_new
 
 class ion_text_label:
     def __init__(self, text, text_object, x, y):
@@ -131,71 +134,71 @@ class PytheasImagePanel(QWidget):
         self.setLayout(self.panel_layout)
 
 
-def labeled_matrix_plot(hsv_data, row_labels, col_labels, text_dict, fs, labels, scale, ax, lw_matrix):
+# def labeled_matrix_plot(hsv_data, row_labels, col_labels, text_dict, fs, labels, scale, ax, lw_matrix):
     
-    nr, nc, _ = hsv_data.shape
-    colors = hsv_to_rgb(hsv_data)
+#     nr, nc, _ = hsv_data.shape
+#     colors = hsv_to_rgb(hsv_data)
     
-    col_sc = scale # column scale (width)
-    row_sc = scale        # row scale (height)
-    nrs = nr * row_sc
-    ncs = nc * col_sc
+#     col_sc = scale # column scale (width)
+#     row_sc = scale        # row scale (height)
+#     nrs = nr * row_sc
+#     ncs = nc * col_sc
           
-    rctr = 0.5 * row_sc # box centers
-    cctr = 0.5 * col_sc
-    roff = 0.1 * row_sc # label offsets
-    coff = 0.1 * col_sc
-    xbox = col_sc
-    ybox = row_sc
-    fss = fs * 0.75
-    lws = 1 * scale
+#     rctr = 0.5 * row_sc # box centers
+#     cctr = 0.5 * col_sc
+#     roff = 0.1 * row_sc # label offsets
+#     coff = 0.1 * col_sc
+#     xbox = col_sc
+#     ybox = row_sc
+#     fss = fs * 0.75
+#     lws = 1 * scale
     
-    # draw color grid
-    for row in range(nr):
-        rs = (nr-row-1) * row_sc # make rows go from top to bottom
-        for col in range(nc):
-            cs = col * col_sc
-            ax.plot(cs, rs,'k ') # have to plot points, or ax has no dimension scaled #$^&*#$
-            color = colors[row][col]
+#     # draw color grid
+#     for row in range(nr):
+#         rs = (nr-row-1) * row_sc # make rows go from top to bottom
+#         for col in range(nc):
+#             cs = col * col_sc
+#             ax.plot(cs, rs,'k ') # have to plot points, or ax has no dimension scaled #$^&*#$
+#             color = colors[row][col]
 
             
-            square = plt.Rectangle((cs, rs), xbox, ybox, facecolor = color,linewidth  = lws, edgecolor='black')
-            ax.add_patch(square)
+#             square = plt.Rectangle((cs, rs), xbox, ybox, facecolor = color,linewidth  = lws, edgecolor='black')
+#             ax.add_patch(square)
 
-    # row and column labels
-    for row in range(nr):
-        rs = (nr-row-1) * row_sc   # make rows go from top to bottom
-        if "left" in labels:
-            ax.text(-coff ,rs + rctr, row_labels[row], size = fss, ha = 'right', va = 'center') # left side
-        if "right" in labels:
-            ax.text(ncs + coff ,rs + rctr, row_labels[row], size = fss, ha ='left', va = 'center') # right side
+#     # row and column labels
+#     for row in range(nr):
+#         rs = (nr-row-1) * row_sc   # make rows go from top to bottom
+#         if "left" in labels:
+#             ax.text(-coff ,rs + rctr, row_labels[row], size = fss, ha = 'right', va = 'center') # left side
+#         if "right" in labels:
+#             ax.text(ncs + coff ,rs + rctr, row_labels[row], size = fss, ha ='left', va = 'center') # right side
             
-    for col in range(nc):
-        cs = col * col_sc
-        if "bottom" in labels:
-            ax.text(cs + cctr, -roff,  col_labels[col], size = fss, ha = 'center', va = 'top', rotation = 'vertical') # bottom side
-        if "top" in labels:
-            ax.text(cs + cctr, nrs + roff,  col_labels[col], size = fss, ha = 'center', va = 'bottom', rotation = 'vertical') # top side
+#     for col in range(nc):
+#         cs = col * col_sc
+#         if "bottom" in labels:
+#             ax.text(cs + cctr, -roff,  col_labels[col], size = fss, ha = 'center', va = 'top', rotation = 'vertical') # bottom side
+#         if "top" in labels:
+#             ax.text(cs + cctr, nrs + roff,  col_labels[col], size = fss, ha = 'center', va = 'bottom', rotation = 'vertical') # top side
 
-    # text in boxes
-    for key, td in text_dict.items():
-        rs = (nr - td["row"] - 1) * row_sc
-        cs = td["col"] * col_sc
-        if len(td["text"]) > 3:
-            fs_box = fs/2
-        else:
-            fs_box = fs
-        ax.text(cs + cctr,rs +rctr,td["text"], size = fs_box, ha = 'center', va = 'center')
+#     # text in boxes
+#     for key, td in text_dict.items():
+#         rs = (nr - td["row"] - 1) * row_sc
+#         cs = td["col"] * col_sc
+#         if len(td["text"]) > 3:
+#             fs_box = fs/2
+#         else:
+#             fs_box = fs
+#         ax.text(cs + cctr,rs +rctr,td["text"], size = fs_box, ha = 'center', va = 'center')
 
-    # bold rectangles for cleavages
-    for row in range(nr):
-        rs = (nr-row-1) * row_sc # make rows go from top to bottom
-        for col in range(nc):
-            if lw_matrix[row,col] != 1:
-                cs = col * col_sc
-                lwx = lw_matrix[row,col]
-                square = plt.Rectangle((cs, rs), xbox, ybox, fill = False,linewidth  = lwx, edgecolor='black')
-                ax.add_patch(square)
+#     # bold rectangles for cleavages
+#     for row in range(nr):
+#         rs = (nr-row-1) * row_sc # make rows go from top to bottom
+#         for col in range(nc):
+#             if lw_matrix[row,col] != 1:
+#                 cs = col * col_sc
+#                 lwx = lw_matrix[row,col]
+#                 square = plt.Rectangle((cs, rs), xbox, ybox, fill = False,linewidth  = lwx, edgecolor='black')
+#                 ax.add_patch(square)
 
 
 def series_name(m):
@@ -212,6 +215,8 @@ def ion_series_matrix(ukey, ax, tfs):
     w_series = ["w","x","y","y-P","z","z-P"]
     ion_hues = [0.33, 0.33, 0.66, 0.84, 0.0, 0.33, 0.66, 0.84, 0.84, 0.0, 0.0]
     ion_hue_dict = {s:c for s,c in zip(ion_series,ion_hues)}
+    light_gray = [0.0, 0.0, 0.75]
+    dark_gray = [0.0, 0.0, 0.5]
 
     f3 = udict["frag3"]
     seq3 =f3[1:-1]
@@ -234,8 +239,23 @@ def ion_series_matrix(ukey, ax, tfs):
     nc = len(szlist)
     iarray = -np.ones((nr,nc))  # initialize intensity array
 
+        
+    # find max intensity for normalization
+    match_int_list = [mdict["obs_int"] for m, mdict in matches.items() if mdict["series"] in ion_series]
+    if len(match_int_list) > 0:
+        match_max_int = max(match_int_list)   
+    else:
+        match_max_int = 1.0
+  
+
+    row_labels = ["" for i in range(nr)]
+    col_labels = ["" for i in range(nc)]
+    
+    lm = Labeled_Matrix(row_labels, col_labels ) # matrix plot object
+    # color_mods_matrix(lm, molecule, pgc.red) # default color is red
+    
     # make text dict with ms2 values
-    text_dict = {}
+    lm.text_dict = {}
     idx = 0
     for mkey, m in cid.items():
         sn = series_name(m)
@@ -249,18 +269,11 @@ def ion_series_matrix(ukey, ax, tfs):
             continue
         ci = szlist.index(sn)
         mz2 = round(m["mz2"],2)
-        text_dict[idx] = {"row": ri, "col": ci, "text": str(mz2)}
+        lm.text_dict[idx] = {"row": ri, "col": ci, "text": str(mz2)}
         iarray[ri, ci] = 0.0 # set to indicate theo ion present
 
         idx += 1
-        
-    # find max intensity for normalization
-    match_int_list = [mdict["obs_int"] for m, mdict in matches.items() if mdict["series"] in ion_series]
-    if len(match_int_list) > 0:
-        match_max_int = max(match_int_list)   
-    else:
-        match_max_int = 1.0
-  
+
     for mkey, m in matches.items():  # set intensity array for matches
         sn = series_name(m)
         if sn not in szlist:
@@ -274,23 +287,42 @@ def ion_series_matrix(ukey, ax, tfs):
         ci = szlist.index(sn)
         iarray[ri, ci] = m["obs_int"]/match_max_int
 
-    color_matrix = np.zeros((nr,nc, 3))  # set up color matrix
-            
+    # lm.text_dict = make_long_text_dict(row_labels, col_labels, molecule, nc) # text dict with mods and optionally all bases
+    # cleavage_box = False  # make optional?
+
+    # color_matrix = np.zeros((nr,nc, 3))  # set up color matrix
+    
+    print("iarray")
+    print(iarray)
     for row in range(nr): # color image array
         irow = nr - row -1 # first row at top, last row at bottom
         for col in range(nc):
             sat = iarray[irow,col]
             if sat == 0.0:  # theo ion not matched
-                color_matrix[irow, col] = [0.0, sat, 0.75] #light gray
-            elif sat == -1:  # no theo ion
-                color_matrix[irow, col] = [0.0,0.0,0.5] # dark gray,
+                lm.color_matrix[irow, col] = light_gray #light gray
+                print(irow, col, light_gray)
+            elif sat == -1.:  # no theo ion
+                lm.color_matrix[irow, col] = dark_gray # dark gray,
+                print(irow, col, dark_gray)
             else: # matched ion
-                color_matrix[irow, col] = [ion_hue_dict[szlist[col][0]], sat, 1.0]
- 
+                hsv = [ion_hue_dict[szlist[col][0]], sat, 1.0]
+                lm.color_matrix[irow, col] = hsv
+                print(irow, col, hsv)
+                
+    print(lm.color_matrix)
+    
+    color = hsv_to_rgb(lm.color_matrix)
+    
+    print("rgb")
+    print(color)
+                       
     if nc == 0 or nr == 0:
         return 
 
-    labeled_matrix_plot(color_matrix, [], [], text_dict, tfs, [], 1.0, ax) # was fsbox
+
+
+
+    labeled_matrix_plot_new(lm, tfs, [], 1.0, ax) # was fsbox
     # plot the labels
     
     rctr = 0.5 # box centers
@@ -453,34 +485,34 @@ def ms2_plot(plot_folder, ukey):
     
     buf = io.BytesIO()
     fig2.savefig(buf, format='png')   # for some reason this works with fig2 but not fig1???
-    buf.seek(0)
-    image = Image.open(buf)
-
-    
-    # width_inches, height_inches = fig2.get_size_inches()
-    # dpi = fig2.get_dpi()
-
-    # width_pixels = width_inches * dpi
-    # height_pixels = height_inches * dpi
-
-    
-    # buf = io.BytesIO()
-    # fig1.savefig(buf, format='png')
     # buf.seek(0)
     # image = Image.open(buf)
-    # image_array = np.array(image, dtype = np.uint8)
 
-    # image = np.array(buf.read(), dtype = np.uint8)
-    # image = np.frombuffer(buf.read(), dtype=np.uint8).reshape(width_pixels, height_pixels)
-    print("image type ", type(image))
-    print("image size ", image.size)
-    image_panel = PytheasImagePanel("title",image)
+    
+    # # width_inches, height_inches = fig2.get_size_inches()
+    # # dpi = fig2.get_dpi()
 
-    # image_widget = ImageWidget()
-    # image_widget.set_image(image_array) # Use image_qimage in the second case
+    # # width_pixels = width_inches * dpi
+    # # height_pixels = height_inches * dpi
+
+    
+    # # buf = io.BytesIO()
+    # # fig1.savefig(buf, format='png')
+    # # buf.seek(0)
+    # # image = Image.open(buf)
+    # # image_array = np.array(image, dtype = np.uint8)
+
+    # # image = np.array(buf.read(), dtype = np.uint8)
+    # # image = np.frombuffer(buf.read(), dtype=np.uint8).reshape(width_pixels, height_pixels)
+    # print("image type ", type(image))
+    # print("image size ", image.size)
+    # image_panel = PytheasImagePanel("title",image)
+
+    # # image_widget = ImageWidget()
+    # # image_widget.set_image(image_array) # Use image_qimage in the second case
    
-    # pgv.main_window_layout.addWidget(image_panel)
-    image_panel.show()
+    # # pgv.main_window_layout.addWidget(image_panel)
+    # image_panel.show()
 
     
     with PdfPages(os.path.join(plot_folder, plot_filename)) as pdf: # multipage PDF

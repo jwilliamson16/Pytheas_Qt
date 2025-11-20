@@ -13,7 +13,7 @@ import numpy as np
 from matplotlib.colors import hsv_to_rgb
 
 from pytheas_global_vars import pgv, pgc
-from ms2_plot import labeled_matrix_plot
+# from ms2_plot import labeled_matrix_plot
 
 class Labeled_Matrix:
     def __init__(self, row_labels, col_labels):
@@ -298,7 +298,7 @@ def sequence_color(n_matches, seq):
         col = pgc.dark_green
     if n_matches > 1 and seq not in pgc.natural:
         col = pgc.light_green
-    print(n_matches, seq, col)
+    # print(n_matches, seq, col)
     return col
 
 def pad_end3_gray_matrix(lm, slen):
@@ -339,7 +339,7 @@ def color_matrix_by_seq(lm, row_idx, fr, to, seq3, n_frags, length, cleavage_box
     seq3_idx = 0     # sequence index within fragment
     for idx in range(fr - 1, to ):    # index in molecule                
         col_idx = idx
-        print(idx)
+        # print(idx)
         lm.color_matrix[row_idx, col_idx] = sequence_color(n_frags, seq3[seq3_idx])
         seq3_idx += 1
         if cleavage_box and idx == to - 1 and idx != length - 1:
