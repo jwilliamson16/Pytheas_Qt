@@ -253,7 +253,7 @@ def matching_ms2(ms2_key, spec, prec_dict):
         precursor["mz_exp"] = pgv.ms2_dict[ms2_key].mz1
         
         offsets = [(precursor["mz_exp"] + float(t) * pgc.neutron_mass/precursor["z"]  - precursor["mz1"])/precursor["mz_exp"] for t in pgv.precursor_isotopologue_list]
-        print([[t,o] for t,o in zip(pgv.precursor_isotopologue_list, offsets)])
+        # print([[t,o] for t,o in zip(pgv.precursor_isotopologue_list, offsets)])
         abs_offset = [abs(o) for o in offsets]
         min_idx =abs_offset.index(min(abs_offset))
         

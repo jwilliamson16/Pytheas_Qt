@@ -213,6 +213,7 @@ def ion_series_matrix(ukey, ax, tfs):
     ion_series = ["a","a-B","b","c","d","w","x","y","y-P","z","z-P"]
     a_series = ["a","a-B","b","c","d"]
     w_series = ["w","x","y","y-P","z","z-P"]
+    
     ion_hues = [0.33, 0.33, 0.66, 0.84, 0.0, 0.33, 0.66, 0.84, 0.84, 0.0, 0.0]
     ion_hue_dict = {s:c for s,c in zip(ion_series,ion_hues)}
     light_gray = [0.0, 0.0, 0.75]
@@ -228,6 +229,7 @@ def ion_series_matrix(ukey, ax, tfs):
     # list of all series_charge states
     szlist = sorted(list(set([series_name(m) for m in matches.values() if m["series"] in ion_series])))
 
+    # standard matrix plot labels not used for ms2_plot
     # left and right labels
     abcd_idx = [i + 1 for i in range(seq3_len)] # pos 0 + [1,2,3,4...n] + (n+1)
     wxyz_idx = [seq3_len + 1 - i for i in abcd_idx]
@@ -237,9 +239,12 @@ def ion_series_matrix(ukey, ax, tfs):
     
     nr = len(abcd_idx)
     nc = len(szlist)
+    
+    if nc == 0 or nr == 0: # no ions matched
+        return 
+
     iarray = -np.ones((nr,nc))  # initialize intensity array
 
-        
     # find max intensity for normalization
     match_int_list = [mdict["obs_int"] for m, mdict in matches.items() if mdict["series"] in ion_series]
     if len(match_int_list) > 0:
@@ -247,12 +252,10 @@ def ion_series_matrix(ukey, ax, tfs):
     else:
         match_max_int = 1.0
   
-
-    row_labels = ["" for i in range(nr)]
+    row_labels = ["" for i in range(nr)] # empty labels
     col_labels = ["" for i in range(nc)]
     
     lm = Labeled_Matrix(row_labels, col_labels ) # matrix plot object
-    # color_mods_matrix(lm, molecule, pgc.red) # default color is red
     
     # make text dict with ms2 values
     lm.text_dict = {}
@@ -287,42 +290,20 @@ def ion_series_matrix(ukey, ax, tfs):
         ci = szlist.index(sn)
         iarray[ri, ci] = m["obs_int"]/match_max_int
 
-    # lm.text_dict = make_long_text_dict(row_labels, col_labels, molecule, nc) # text dict with mods and optionally all bases
-    # cleavage_box = False  # make optional?
-
-    # color_matrix = np.zeros((nr,nc, 3))  # set up color matrix
-    
-    print("iarray")
-    print(iarray)
     for row in range(nr): # color image array
         irow = nr - row -1 # first row at top, last row at bottom
         for col in range(nc):
             sat = iarray[irow,col]
             if sat == 0.0:  # theo ion not matched
-                lm.color_matrix[irow, col] = light_gray #light gray
-                print(irow, col, light_gray)
+                lm.color_matrix[irow, col] = light_gray 
             elif sat == -1.:  # no theo ion
-                lm.color_matrix[irow, col] = dark_gray # dark gray,
-                print(irow, col, dark_gray)
+                lm.color_matrix[irow, col] = dark_gray 
             else: # matched ion
                 hsv = [ion_hue_dict[szlist[col][0]], sat, 1.0]
                 lm.color_matrix[irow, col] = hsv
-                print(irow, col, hsv)
-                
-    print(lm.color_matrix)
-    
-    color = hsv_to_rgb(lm.color_matrix)
-    
-    print("rgb")
-    print(color)
-                       
-    if nc == 0 or nr == 0:
-        return 
-
-
-
-
+  
     labeled_matrix_plot_new(lm, tfs, [], 1.0, ax) # was fsbox
+ 
     # plot the labels
     
     rctr = 0.5 # box centers

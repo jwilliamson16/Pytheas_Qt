@@ -44,9 +44,13 @@ class nt_fragment: # class for nucleotide group fragments
          atom_stois = df["N_atoms"]
          atom_groups = df["Atom_group"] # don't need to keep
          self.groups = list(atom_groups.unique())
+         self.atoms = list(atom_symbols.unique())
          self.mass_dict = {g:0.0 for g in self.groups}
          for g,s,stoi in zip(atom_groups, atom_symbols, atom_stois):
-                 self.mass_dict[g] += stoi * pgv.atomic_dict[s]["am"]
+             self.mass_dict[g] += stoi * pgv.atomic_dict[s]["am"]
+         self.mol_form = {a:0 for a in self.atoms} # for isodist
+         for a,s in zip(atom_symbols, atom_stois):
+             self.mol_form[a] += s
          self.mass = sum(self.mass_dict.values())
  
 class MS2_spectrum:
