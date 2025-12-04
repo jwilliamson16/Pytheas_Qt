@@ -7,14 +7,18 @@ Created on Mon Nov 24 14:00:34 2025
 """
 
 import copy
+from datetime import datetime
 
 from scipy.fft import rfft, irfft,rfftfreq
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.optimize import least_squares
 
 
 from isodist_global_variables import igv
 from pytheas_global_vars import pgv
+
+from mod_seq_functions import generate_mod_seq, generate_mod_seq_ends
 
 
 class ISODIST_MODEL:
@@ -41,6 +45,16 @@ class ISODIST_MODEL:
 #     print("auto_baseline = ", igv.auto_baseline)
      
 #     # return(opt,batchfile,atomfile,resfile,niter,sig_global,x_init,auto_baseline)
+
+def find_active_residues():
+    igv.active_residues = []
+    for idx, row in pgv.top_match_df.iterrows():
+        frag3 = row["frag3"]
+        for res in frag3:
+            if res not in igv.active_residues:
+                igv.active_residues.append(res)
+    
+    print("active residues: ", igv.active_residues)
 
 
 def create_atom_dict():
@@ -313,6 +327,32 @@ def calculate_mol_form(frag3, label, z):
     return mol_form
 
 
+def isodist_setup():
+    find_active_residues()  
+    
+    # opts = ["showfit", "showguess"]
+    igv.opts = ["showfit"]
+    
+    igv.atomfile = "pytheas_atom_definitions.txt" # atom definition file  = atom_definitions.txt
+    igv.model_file = "pytheas_label_model.txt"
+    igv.isodist_file = "isodist_output.xlsx"
+    
+    # mz = np.zeros(0)
+    # for i in range(igc.npt):            # mz axis
+    #     mz = np.append(mz,float(i+1)/igc.scale_mz)
+    
+    #TODO check if 1st point should be zero or, as above
+    
+    igv.mz = np.linspace(0, igv.npt/igv.scale_mz, igv.npt)  # calc mz axis
+    igv.cmz = rfftfreq(igv.npt) # complex calc mz axis
+    create_atom_dict()  # input atom parameters   jgv.atom_dict
+    create_model() # igv.species_dict  igv.atom_order_dict igv.atom_fix_dict igv.model
+    create_atom_mu()  # generate mu domain spectra for atoms  (natom_types, ncp) 
+    initialize_residue_mu(igv.active_residues)  # generate mu domain spectra for residues
+    
+    initialize_fit_model()
+
+
 def calc_isodist(x, return_opt, seq, yobs, mz_hd, z):
      
      #  fit function to take fit parameters x and return residuals eft_obs - sp_mz  
@@ -421,6 +461,148 @@ def calc_isodist(x, return_opt, seq, yobs, mz_hd, z):
         
         return mz_spectrum, spectrum
      
+
+def initialize_fit_model():
+    igv.parlabel = ["B","OFF","GW"]
+    igv.x_init = [1.0, 0.01, 0.003]  # initial values for B, OFF, GW
+    lower_bounds = [-1000.0,-1.0,0.001]
+    upper_bounds = [np.inf,1.0,0.03]
+    fitpar_idx = 2
+    
+    # amplitude parameters
+    alab = "AMP_"
+    igv.model.amp_idx = []
+    for i in range(igv.model.n_species):
+        fitpar_idx += 1
+        igv.model.amp_idx.append(fitpar_idx)
+        igv.parlabel.append(alab + igv.model.species_lab[i])
+        igv.x_init.append(igv.model.amp[i])
+        lower_bounds.append(0.0)
+        upper_bounds.append(np.inf)
+    
+    # fractional atom parameters
+    flab = "FRC_"
+    igv.model.frac_idx = []
+    for i in range(igv.model.n_var_atom):
+        fitpar_idx += 1
+        igv.model.frac_idx.append(fitpar_idx)
+        igv.parlabel.append(flab + igv.model.var_atom[i])
+        igv.x_init.append(igv.model.frac[i])
+        lower_bounds.append(0.0)
+        upper_bounds.append(1.0)
+    
+    igv.xbounds = (lower_bounds,upper_bounds)
+ 
+    print("number of params to fit :",len(igv.x_init),igv.x_init)
+     
+    # column labels for isodist output
+    igv.column_labels = igv.outlabels + igv.parlabel
+    igv.column_labels = igv.column_labels + ["max_fit","min_fit","max_rsd","min_rsd"]
+    nfit = 11  
+    nwr = 23
+    for nf in range(nfit):
+        igv.column_labels.append("avg_fit" + str(nf+1))
+    for nw in range(nwr):
+        igv.column_labels.append("avg_wr" + str(nw+1))
+        
+
+def fit_isotope_distribution(match_df_idx):
+    match_row = pgv.top_match_df.loc[match_df_idx]
+    ms = igv.minispec[match_df_idx]
+    
+    frag3 = match_row["frag3"]
+    seq3 =  frag3[1:-1]
+    # seq = generate_mod_seq(seq3)
+    seq = generate_mod_seq_ends(frag3)
+    z = abs(ms.z)
+    moz = match_row["mz1"]
+
+    print("SEQUENCE, z = ", seq, z)
+    
+    #TODO eliminate peakfile
+    peakfile = "_".join([str(match_row["ms2_key"]), ms.mol, seq, str(z)]) + ".txt"
+    seqlab = ms.mol
+    
+    ri_array = ms.rt_slice  # experimental spectrum
+    rmz_array = ms.mini_mz
+
+    nmz = 0 # counter to fill experimental arrays
+    igv.mz_ptr = np.zeros(len(rmz_array), dtype = int)
+    xobs = np.zeros(len(rmz_array))
+    yobs = np.zeros(len(rmz_array))
+    mz_hd = rmz_array[0] * z  # heterodyne mass set to lower bound of mz
+    
+    # build arrays for fitting, mz_ptr has indices from oversampled theo distribution
+    for rmz, ri in zip(rmz_array, ri_array):
+        n = int((rmz * z - mz_hd)*igv.scale_mz + 0.5)
+
+        igv.mz_ptr[nmz] = n
+        xobs[nmz] = (rmz * z - mz_hd) * igv.scale_mz
+        yobs[nmz] = ri
+        nmz += 1
+        
+    # igv.mz_ptr = mz_ptr
+    
+    x_init = igv.x_init.copy()
+    x_init[3] = max(yobs)
+    x_init[4] = max(yobs)
+    
+#TODO are GW and AMP anticorrelated?  
+    
+    if "showguess" in igv.opts:     # calc initial guess
+        
+        mz_spec, spec = calc_isodist(x_init, "spectrum", frag3, yobs, mz_hd, z)
+        resid = calc_isodist(igv.x_init, "residuals", frag3, 12*yobs, mz_hd, z)
+        plot_obs_calc(mz_spec, yobs, mz_spec, spec, seq + " Initial guess")
+     
+    prelim_end = datetime.now()
+    fit_start = prelim_end
+
+    lsq_soln = least_squares(calc_isodist, igv.x_init, verbose = 1, bounds = igv.xbounds, 
+                             x_scale = 'jac', max_nfev=100,
+                             args =("residuals", frag3, yobs, mz_hd, z))
+
+    x_fit = lsq_soln.x
+    chisq = 2.0 *lsq_soln.cost/(igv.sig_global*igv.sig_global*nmz)  # factor of 2 to make cost correpsond to chisquared
+        
+    xfit = [float(round(x,6)) for x in x_fit]
+    
+    print("fit time = ", datetime.now()- fit_start)
+    print(" solution = ", xfit)
+           
+    mz_fit, fit = calc_isodist(x_fit, "spectrum", frag3, yobs, mz_hd, z)
+    resid = calc_isodist(igv.x_init, "residuals", frag3, yobs, mz_hd, z)
+
+    if "showfit" in igv.opts:
+        plot_obs_calc(mz_fit, yobs, mz_fit, fit, seq + " Final Fit")
+   
+    max_fit, min_fit, max_rsd, min_rsd, avg_fit, avg_wr = calculate_residuals(x_fit, fit, resid)
+        
+    # assemble output columns
+    column_data = [peakfile, seqlab, seq, moz, z, chisq, mz_hd]
+    column_data = column_data + x_fit.tolist() + [max_fit, min_fit, max_rsd, min_rsd] + avg_fit + avg_wr
+    
+    column_dict = {col:dat for col, dat in zip(igv.column_labels, column_data)}
+
+# todo store this in minispectrum
+
+    ms.mz_fit = fit
+
+#TODO make this a function
+    if "plotfit" in igv.opts:
+# write out fit plot
+        plotfile = peakfile.replace(".txt",".png")
+        plt.plot(mz_fit, yobs,".k")
+        plt.ylabel("amplitude")
+        plt.xlabel("m/z")
+        plt.title(seq + " m0 = " + str(round(mz_hd,3)))
+        plt.plot(mz_fit, fit, "-r")
+        plt.savefig(plotfile)
+        plt.clf()
+
+    return column_dict
+
+
 
 def calculate_residuals(x_fit, fit, resid):
 #   RESIDUAL EXTRAVAGANZA
