@@ -88,9 +88,13 @@ class PGC: # class for global constants
         panel_y_delta = 50
         
         # pytheas dicts to save to json files
-        digest_json = ["mol", "mod", "unique_precursor",
-                                                "unique_frag", "frag"]
-        match_json =  ["unpacked_match", "ms2_match", "match", "top_match"]
+        digest_pickle = ["mol_dict", "mod_dict", "unique_precursor_dict",
+                                                "unique_frag_dict", "frag_dict"]
+        match_pickle =  ["unpacked_match_dict", "ms2_match_dict", "match_dict", "top_match_dict"]
+  
+        isodist_rt_pickle = ["rt_index_dict", "rt_scan_dict", "rt_list", "mz_exp"]
+        isodist_minispec_pickle = ["rt_dict", "minispec"]
+        
         # discovery_json = ["master_discovery", "unpacked_discovery", "discovery",
         #                      "iso_mass"]
         discovery_json = ["unpacked_discovery", "discovery",
@@ -101,6 +105,19 @@ class PGC: # class for global constants
         ion_colors = ["gray", "gray", "green", "green","blue", "magenta", "red", "green", "blue", "magenta", "magenta", "red", "red"]
         ion_color_dict =  {s:c for s,c in zip(ion_series,ion_colors)}
 
+
+        # isodist constants
+        # isodist_rt_json = ["rt_index", "rt_scan", "rt_list", "mz_exp"]
+
+        npt = 131072	     # np is the number of points calculated
+        ncp=int(npt/2)+1		     # ncp is the number of complex points				
+        scale_mz=1000.0	     # scale_mz determines the number of points calculated per dalto for oversampling				
+        outlabels=["file","mol_id","seq","mw","z_charge","chisq","mz"]  # headers for csv
+        sig_global = 100.0
+        rtpad = 60.0   # RT window for peak fitting
+        mzpad = 2.0    # mz window for peak fitting
+
+        
         for var, val in locals().items():  # shortcut to avoid self.var for each var above
             if var == "self":
                 continue

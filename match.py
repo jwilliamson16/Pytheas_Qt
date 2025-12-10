@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 from pytheas_global_vars import pgv, pgc
-from pytheas_IO import read_pytheas_file, save_json_files
+from pytheas_IO import read_pytheas_file, save_pickle_set
 from match_functions import (match_spectra, unpack_match_dict, iTRAQ_quantitation, 
                                  output_match_dict_file, match_output_keys, 
                                  consolidated_match_output, make_match_plot, 
@@ -66,11 +66,15 @@ def match():
         else:
             make_long_match_plot("match_sequence_map" + match_job)
         
-    if pgv.output_match_json == "y":  # write out json files 
-        json_dir = os.path.join(pgv.job_dir, "pytheas_json_files")
-        Path(json_dir).mkdir(parents=True, exist_ok=True)
-        save_json_files(pgc.match_json, json_dir)
-    
+    if pgv.output_match_pickle == "y":  # write out json files 
+        save_pickle_set(pgc.match_pickle, pgv.job_dir)
+        # json_dir = os.path.join(pgv.job_dir, "pytheas_json_files")
+        # Path(json_dir).mkdir(parents=True, exist_ok=True)
+        # save_json_files(pgc.match_json, json_dir)
+        # for obj in pgc.match_pickle:
+        #     pickle_file = os.path.join(pgv.job_dir, obj + ".pickle")
+        #     save_pickle(obj, pickle_file)
+
     print("pgv.plot_MS2_spectra: ", pgv.plot_MS2_spectra)
     if pgv.plot_MS2_spectra == 'y':
         plot_ms2_spectra()

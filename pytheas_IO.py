@@ -140,15 +140,22 @@ def read_enzyme_def_file(file):
         valdict["cut_idx"] = int(valdict["cut_idx"])
 
 def read_custom_cleavage(file):
-    cleavage_sheet_dict = pd.read_excel(file,None)
-    cleavage_df = cleavage_sheet_dict["enzymes"]
+    # cleavage_sheet_dict = pd.read_excel(file,None)
+    # cleavage_df = cleavage_sheet_dict["enzymes"]
+    cleavage_df = pd.read_excel(file)
     pgv.custom_cleavage_dict = cleavage_df.set_index("name").to_dict('index')
     
     for valdict in pgv.custom_cleavage_dict.values(): # split elements into lists
         valdict["pattern"] = parse_enzyme_pattern(valdict["pattern"])
         valdict["end_3"] = valdict["end_3"].split(",")
         valdict["end_5"] = valdict["end_5"].split(",")
-        valdict["cut_idx"] = int(valdict["cut_idx"])
+        # valdict["cut_idx"] = int(valdict["cut_idx"])
+        print("valdict: ", valdict["cut_idx"], type(valdict["cut_idx"]))
+        if type(valdict["cut_idx"]) == int:
+            valdict["cut_idx"] = [valdict["cut_idx"]]
+        else:
+            valdict["cut_idx"] = [int(v) for v in valdict["cut_idx"].split(",")]
+
 
 def read_charge_file(file):
     chg_sheet_dict = pd.read_excel(file, None)
@@ -180,16 +187,16 @@ def read_modification_sets(file):
     print("read_modification_set: pgv.set_dict", pgv.set_dict)
 
 
-def write_json(j_dict, j_file):
-    j = json.dumps(j_dict, indent=4)
-    with open(j_file, 'w') as f:
-        print(j, file=f)
+# def write_json(j_dict, j_file):
+#     j = json.dumps(j_dict, indent=4)
+#     with open(j_file, 'w') as f:
+#         print(j, file=f)
 
-def read_json(j_file):
-    print("reading json file: ", j_file)
-    with open(os.path.normpath(j_file), 'r') as f:
-        j_dict = json.load(f)
-    return j_dict
+# def read_json(j_file):
+#     print("reading json file: ", j_file)
+#     with open(os.path.normpath(j_file), 'r') as f:
+#         j_dict = json.load(f)
+#     return j_dict
   
 def read_output_format(file):
     # global output_format_dict
@@ -214,8 +221,8 @@ def read_fasta_file(fasta_file): # digest
         else:
             print("Duplicate sequence ID: ", seq_id)
             
-    pgv.molecule_dict = {key: molecule(mdict) for key, mdict in pgv.mol_dict.items()}
-    pickle.dump(pgv.molecule_dict, open(os.path.join(pgv.job_dir, "molecule_dict.pkl"), "wb" ))
+    # pgv.molecule_dict = {key: molecule(mdict) for key, mdict in pgv.mol_dict.items()}
+    # pickle.dump(pgv.molecule_dict, open(os.path.join(pgv.job_dir, "molecule_dict.pkl"), "wb" ))
 
      
 def read_mod_file(mod_file):
@@ -320,6 +327,10 @@ def read_mgf_file(file):
         
     return data_dict
 
+def read_MS1_data_file(file):
+    pgv.MS1_data = mzml.MzML(file)  # 30 sec
+
+
 # TODO fix this hot mess
 # def read_modification_sets(setfile):
 #     global set_dict
@@ -345,28 +356,62 @@ def read_mgf_file(file):
 
 #     print("loading json files from : ", load_dir)
 
-def load_json_files(module, load_dir):
-    # print("digest_json_dict", pgc.digest_json_dict)
-    
-    for jroot in module:
-        jfile = jroot + ".json"
-        jvar = jroot + "_dict"
-        setattr(pgv, jvar, read_json(os.path.join(load_dir,"pytheas_json_files", jfile)))
+def read_flat_text_file(file):
+    with open(file) as f:
+            pgv.text_lines = [line.strip().split() for line in f]
 
-def save_json_files(module, json_dir):
-    print("json files for ", module)
-    for jroot in module:
-        jfile = jroot + ".json"
-        jvar = getattr(pgv, jroot + "_dict")
-        write_json(jvar, os.path.join(json_dir, jfile))
-        
-def save_pickle(obj, file_path):
-    print("obj", obj.keys(), file_path)
-    pickle.dump(obj, open(file_path, "wb" ))
+
+# def load_json_files(module, load_dir):
+#     # print("digest_json_dict", pgc.digest_json_dict)
+    
+#     for jroot in module:
+#         jfile = jroot + ".json"
+#         jvar = jroot + "_dict"
+#         setattr(pgv, jvar, read_json(os.path.join(load_dir,"pytheas_json_files", jfile)))
+
+# def save_json_files(module, json_dir):
+#     print("json files for ", module)
+#     for jroot in module:
+#         jfile = jroot + ".json"
+#         jvar = getattr(pgv, jroot + "_dict")
+#         write_json(jvar, os.path.join(json_dir, jfile))
+ 
+# def load_json_files(module, load_dir):
+#     # print("digest_json_dict", pgc.digest_json_dict)
+    
+#     for jroot in module:
+#         jfile = jroot + ".pkl"
+#         jvar = jroot + "_dict"
+#         setattr(pgv, jvar, load_pickle(os.path.join(load_dir,"pytheas_json_files", jfile)))
+
+# def save_json_files(module, json_dir):
+#     print("json files for ", module)
+#     for jroot in module:
+#         jfile = jroot + ".pkl"
+#         jvar = getattr(pgv, jroot + "_dict")
+#         save_pickle(jvar, os.path.join(json_dir, jfile))
+ 
+       
+def save_pickle(obj, file_path): # obj = name of pgv object
+    print("obj", obj, file_path)
+    pickle_obj = getattr(pgv, obj)
+    pickle.dump(pickle_obj, open(file_path, "wb" ))
     print("Saved: ", file_path)
 
-def load_pickle(pickle_file):
-    obj = pickle.load(open(pickle_file, "rb"))
-    return obj
+def load_pickle(obj, pickle_file):
+    setattr(pgv, obj,  pickle.load(open(pickle_file, "rb")))
+    print("Loading ", obj, "from", pickle_file)
+    # return obj
       
+def load_pickle_set(obj_list, load_dir):
+    for obj in obj_list:
+        pickle_file = os.path.join(load_dir, obj + ".pickle")
+        setattr(pgv, obj,  pickle.load(open(pickle_file, "rb")))
+        print("Loading ", obj, "from", pickle_file)
+
+def save_pickle_set(obj_list, load_dir):
+    for obj in obj_list:
+        pickle_file = os.path.join(load_dir, obj + ".pickle")
+        pickle_obj = getattr(pgv, obj)
+        pickle.dump(pickle_obj, open(pickle_file, "wb" ))
         

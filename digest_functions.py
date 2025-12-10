@@ -34,14 +34,15 @@ def add_modifications(): # parse raw fasta seq and add modifications
 
     # generate seq3 from raw_seq
     for seq_id, sdict in pgv.mol_dict.items():
-        mol = pgv.molecule_dict[seq_id]
+        # mol = pgv.molecule_dict[seq_id]
+        # mol = pgv.mol_dict[seq_id]
         if pgv.rna_mods != 'fasta':  # none, modfile, or 1-letter 
             # print(seq_id, sdict.keys())
             sdict["seq3"] = parse_1_letter(sdict["raw_seq"])
-            mol.seq3 = parse_1_letter(mol.raw_seq)
+            # mol.seq3 = parse_1_letter(mol.raw_seq)
         else:
             sdict["seq3"] = parse_mod_seq(sdict["raw_seq"])  # parse mods in brackets from fasta
-            mol.seq3 = parse_mod_seq(mol.seq3)
+            # mol.seq3 = parse_mod_seq(mol.seq3)
     # pickle.dump(pgv.molecule_dict, open(os.path.join(pgv.job_dir, "molecule_2+dict.pkl"), "wb" ))
             
     if pgv.rna_mods == 'modfile':  # read modifications in from mod def file
@@ -89,6 +90,8 @@ def enzyme_digest():
     unique_frag_dict = {}
     for enzyme in pgv.enzymes:
         print("digesting with ", enzyme)
+        if enzyme == "custom":
+            read_pytheas_file("custom_cleavage_file")
         for mol, mdict in pgv.mol_dict.items():    
             frag_seq_list = digest_sequence(mol, mdict, unique_frag_dict, enzyme)  # do enzyme digest -> unique_frag_seq_dict
             mdict["frag_seq_key_list"] = frag_seq_list
@@ -179,26 +182,36 @@ def generate_custom_cut_list(seq3, mol, ufdict, frag_seq_key_list):
     
     #TODO check for sensible range with missed cleavages
     cut_list = []
+    template_cut_index_list = []
     length = len(seq3)
-    last = length + 1
+    last = length
+    # last = length + 1  # changed for digest plot bug
     
     for key, cd in pgv.custom_cleavage_dict.items():
-        pattern, cut_idx, end_5, end_3 = [cd[key] for key in ["pattern", "cut_idx", "end_5", "end_3"]]
-        
-        match_index_list = []
-        for patt in pattern :
-            for i in range(len(seq3)):
-                if  patt == seq3[i:i + len(patt)]:
-                    match_index_list.append(i)
+        for cut_idx in cd["cut_idx"]:
+            pattern, end_5, end_3 = [cd[key] for key in ["pattern", "end_5", "end_3"]]
+            match_index_list = []
+            for patt in pattern :
+                for i in range(len(seq3)):
+                    if  patt == seq3[i:i + len(patt)]:
+                        match_index_list.append(i)
+            print("match_index_list", mol, key, match_index_list)          
                     
-        cut_index_list = [0] + [m + cut_idx for m in match_index_list] + [last] # add cut offset from match
-
-        misses = min(pgv.miss, len(cut_index_list)-2) # of matches - 2 ends
-        cut_list = [[cut_index_list[i], cut_index_list[i+miss + 1], miss] # loop thru cut_index_list for each miss 
-                    for miss in range(misses+1) 
-                    for i in range(len(cut_index_list) - miss - 1)]
-        
-        process_cut_list(seq3, cut_list, mol, ufdict, frag_seq_key_list)
+        # cut_index_list = [0] + [m + cut_idx for m in match_index_list] + [last] # add cut offset from match
+            template_cut_index_list += [m + cut_idx for m in match_index_list] # add cut offset from match
+            print("template_cut_index_list", template_cut_index_list)
+    cut_index_list = sorted(list(set([0] + template_cut_index_list + [last])))  # sorted master list
+    # cut_index_list = list(set([0] + template_cut_index_list + [last])) # sorted master list
+    print("cut_index_list", cut_index_list)
+    misses = min(pgv.miss, len(cut_index_list)-2) # of matches - 2 ends
+    cut_list = [[cut_index_list[i], cut_index_list[i+miss + 1], miss] # loop thru cut_index_list for each miss 
+                for miss in range(misses+1) 
+                for i in range(len(cut_index_list) - miss - 1)]
+    
+    print("cut list", mol)
+    print(cut_list)
+    print()
+    process_cut_list(seq3, cut_list, mol, ufdict, frag_seq_key_list)
 
 def generate_random_cut_list(seq3):
     
@@ -216,7 +229,7 @@ def generate_random_cut_list(seq3):
     return cut_list
 
 def process_cut_list(seq3, cut_list, mol, ufdict, frag_seq_key_list):
-
+     # print("cut_list", cut_list)
      for fr,to,miss in cut_list:     
        if fr == 0:
            end5_list = pgv.mol_end5
@@ -239,7 +252,7 @@ def process_cut_list(seq3, cut_list, mol, ufdict, frag_seq_key_list):
                
                length = len(s3)
                if pgv.min_length <= length <= pgv.max_length:
-                   # print(mol, end5, end3, fr, to, length, miss)
+                   # print("process_cut_list: ", mol, end5, end3, fr, to, length, miss)
                    unique_fragment(mol, end5, seq3, end3, fr, to, length, miss, ufdict, frag_seq_key_list)
 
 
@@ -266,7 +279,7 @@ def digest_sequence(mol, mdict, ufdict, enzyme): # process one sequence # digest
         cut_list = generate_random_cut_list(seq3)
         
      elif enzyme == "custom":
-        read_pytheas_file("custom_cleavage_file")
+        # read_pytheas_file("custom_cleavage_file")
         generate_custom_cut_list(seq3, mol, ufdict, frag_seq_key_list)
         return frag_seq_key_list
         
@@ -312,7 +325,9 @@ def calculate_m0_mz1(G, label, seq3n, z_limit):
         zsign = -1
     else:
         zsign = 1
-    length = min(len(seq3n) - 2 , pgv.max_length) # subtract 2 for ends
+    # length = min(len(seq3n) - 2 , pgv.max_length) # subtract 2 for ends
+    length = min(len(seq3n) - 2 , 20) # subtract 2 for ends
+
     if z_limit == "all":
         z1_list = [z * zsign for z in pgv.MS_charge_dict["MS1_charges"][length]]
     else:
@@ -456,14 +471,14 @@ def make_digest_plot(output_file):
         seq_list = fdict["seq_list"]
         n_frags = len(seq_list)
         seq3 = fdict["frag3"][1:-1]
-        print("frag", f, seq_list)
+        # print("frag", f, seq_list)
         for seq in seq_list:
             mol, r, _ = seq.split(":")
             length = len(pgv.mol_dict[mol]["raw_seq"])
             row_idx = row_labels.index(mol)
             fr, to = map(int,r.split("_"))   # these are sequence indices
             
-            print(row_idx, fr, to, seq3, n_frags )
+            # print(row_idx, fr, to, seq3, n_frags )
             color_matrix_by_seq(lm, row_idx, fr, to, seq3, n_frags, length, cleavage_box)
     
     lm.output_file = output_file

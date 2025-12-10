@@ -8,6 +8,7 @@ Created on Mon Nov 24 14:00:34 2025
 
 import copy
 from datetime import datetime
+import os
 
 from scipy.fft import rfft, irfft,rfftfreq
 import numpy as np
@@ -15,10 +16,12 @@ import matplotlib.pyplot as plt
 from scipy.optimize import least_squares
 
 
-from isodist_global_variables import igv
-from pytheas_global_vars import pgv
+# from isodist_global_variables import pgv
+from pytheas_global_vars import pgv, pgc
+from pytheas_IO import read_pytheas_file, load_pickle_set
 
 from mod_seq_functions import generate_mod_seq, generate_mod_seq_ends
+from PyQt5.QtWidgets import  QFileDialog
 
 
 class ISODIST_MODEL:
@@ -27,43 +30,26 @@ class ISODIST_MODEL:
             setattr(self, key, val)
             
 
-# def read_control_data(infile):
-    
-#     with open(infile) as file:
-#         lines = [line.split(" ") for line in file]
-    
-#     igv.opt = lines[0][0]       # program option = fitit, tryit  ( not used)
-#     igv.batchfile = lines[1][0] # batch input file of peaks to be fit
-#     igv.atomfile = lines[2][0]  # atom definition file  = atom_definitions.txt
-#     igv.resfile = lines[3][0]   # residue definition file
-#     igv.niter = int(lines[4][0])   # number of iterations for least squares (not used)
-#     igv.sig_global = float(lines[5][0])  # global error ( not used)
-    
-#     igv.x_init = [float(lines[6][0]),float(lines[7][0]),float(lines[8][0])]
-    
-#     igv.auto_baseline = lines[6][1]
-#     print("auto_baseline = ", igv.auto_baseline)
-     
-#     # return(opt,batchfile,atomfile,resfile,niter,sig_global,x_init,auto_baseline)
-
 def find_active_residues():
-    igv.active_residues = []
+    pgv.active_residues = []
     for idx, row in pgv.top_match_df.iterrows():
         frag3 = row["frag3"]
         for res in frag3:
-            if res not in igv.active_residues:
-                igv.active_residues.append(res)
+            if res not in pgv.active_residues:
+                pgv.active_residues.append(res)
     
-    print("active residues: ", igv.active_residues)
+    print("active residues: ", pgv.active_residues)
 
 
 def create_atom_dict():
     
-    with open(igv.atomfile) as file:
-            lines = [line.strip().split() for line in file]
+    read_pytheas_file("isodist_atomdef_file")
+    lines = pgv.text_lines.copy()
+    # with open(pgv.atomfile) as file:
+    #         lines = [line.strip().split() for line in file]
 
     nl = 0
-    igv.atom_dict = {}
+    pgv.atom_dict = {}
     while nl < len(lines):
         # nat = int(lines[nl][0])
         atom_symb = lines[nl][0]
@@ -78,16 +64,19 @@ def create_atom_dict():
             fiso_list.append(float(lines[nl][1]))
             nl = nl + 1
         atom_entry = {"niso": niso, "miso": miso_list,"fiso": fiso_list, "comment": atom_comment}
-        igv.atom_dict[atom_symb] = atom_entry
+        pgv.atom_dict[atom_symb] = atom_entry
         
     # return(atom_dict)
 
 def create_model():
 
+    # with open(pgv.model_file) as file:
+    #         lines = [line.strip().split() for line in file]
+    read_pytheas_file("isodist_modeldef_file")
+    lines = pgv.text_lines.copy()
+
     n_var_atom = 0
-    with open(igv.model_file) as file:
-            lines = [line.strip().split() for line in file]
-    
+
     reslib_comment = " ".join(lines[0]).split("=")[0]
     print("MODEL: ",reslib_comment)
     
@@ -96,7 +85,7 @@ def create_model():
     species_lab = []
     amp = []
     ptr = 2
-    igv.species_dict = {}
+    pgv.species_dict = {}
     for species in range(n_species):
         species_lab.append(lines[ptr][0])
         amp.append(float(lines[ptr][1]))
@@ -105,16 +94,16 @@ def create_model():
     ptr = ptr + 1
     
     
-    igv.species_dict["n_species"] = n_species
-    igv.species_dict["species_lab"] = species_lab
-    igv.species_dict["amp"] = amp
-    igv.species_dict["natom_types"] = natom_types
+    pgv.species_dict["n_species"] = n_species
+    pgv.species_dict["species_lab"] = species_lab
+    pgv.species_dict["amp"] = amp
+    pgv.species_dict["natom_types"] = natom_types
     
-    igv.n_species = n_species
+    pgv.n_species = n_species
     
     # ATOM ORDER DICT
-    igv.atom_order_dict = {}
-    igv.atom_fix_dict = {}
+    pgv.atom_order_dict = {}
+    pgv.atom_fix_dict = {}
     atom_idx = 0
     var_atom = []
     frac = []
@@ -131,153 +120,40 @@ def create_model():
             frac.append(float(lines[ptr][2]))
             var_atom.append(atom_symb)
             n_var_atom = n_var_atom+1
-        igv.atom_order_dict[atom_symb] = atom_idx
-        igv.atom_fix_dict[atom_symb]=[atom_fix,fix,frac]
+        pgv.atom_order_dict[atom_symb] = atom_idx
+        pgv.atom_fix_dict[atom_symb]=[atom_fix,fix,frac]
         atom_idx = atom_idx + 1
         ptr = ptr + 1
-    igv.species_dict["frac"] = frac
+    pgv.species_dict["frac"] = frac
     
     # print("constructing model")
-    igv.model = ISODIST_MODEL(igv.species_dict)
+    pgv.model = ISODIST_MODEL(pgv.species_dict)
     
 
-    igv.model.n_var_atom = n_var_atom
-    igv.model.var_atom = var_atom
+    pgv.model.n_var_atom = n_var_atom
+    pgv.model.var_atom = var_atom
     # omitting variable residue labeling for now
-    # igv.model.n_var_res = n_var_res
-    # igv.model.n_fix_res = n_fix_res
-    # igv.model.var_res = var_res
-    # igv.model.phi = phi
+    # pgv.model.n_var_res = n_var_res
+    # pgv.model.n_fix_res = n_fix_res
+    # pgv.model.var_res = var_res
+    # pgv.model.phi = phi
     # return(species_dict,atom_order_dict,atom_fix_dict,residue_dict)    
 
-# def create_residue_dicts():
 
-#     n_var_atom = 0
-#     with open(igv.resfile) as file:
-#             lines = [line.strip().split() for line in file]
-    
-#     reslib_comment = " ".join(lines[0]).split("=")[0]
-#     print("RESIDUE LIBRARY: ",reslib_comment)
-    
-#     # SPECIES DICT
-#     n_species = int(lines[1][0])
-#     species_lab = []
-#     amp = []
-#     ptr = 2
-#     igv.species_dict = {}
-#     for species in range(n_species):
-#         species_lab.append(lines[ptr][0])
-#         amp.append(float(lines[ptr][1]))
-#         ptr = ptr + 1
-#     natom_types = int(lines[ptr][0])
-#     ptr = ptr + 1
-    
-    
-#     #TODO create model object here
-    
-#     igv.species_dict["n_species"] = n_species
-#     igv.species_dict["species_lab"] = species_lab
-#     igv.species_dict["amp"] = amp
-#     igv.species_dict["natom_types"] = natom_types
-    
-#     igv.n_species = n_species
-    
-#     # ATOM ORDER DICT
-#     igv.atom_order_dict = {}
-#     igv.atom_fix_dict = {}
-#     atom_idx = 0
-#     var_atom = []
-#     frac = []
-#     for atoms in range(natom_types):
-#         atom_symb = lines[ptr][0]
-#         atom_fix = lines[ptr][1]
-#         if atom_fix == "default":
-#             fix = 0
-#         elif atom_fix == "fixed":
-#             fix = 0
-#             frac.append(float(lines[ptr][2]))
-#         elif atom_fix == "variable":
-#             fix = 1
-#             frac.append(float(lines[ptr][2]))
-#             var_atom.append(atom_symb)
-#             n_var_atom = n_var_atom+1
-#         igv.atom_order_dict[atom_symb] = atom_idx
-#         igv.atom_fix_dict[atom_symb]=[atom_fix,fix,frac]
-#         atom_idx = atom_idx + 1
-#         ptr = ptr + 1
-#     igv.species_dict["frac"] = frac
-    
-#     # print("constructing model")
-#     igv.model = ISODIST_MODEL(igv.species_dict)
-    
-#     # RESIDUE DICT
-    
-#     nr=0
-#     n_var_res=0
-#     n_fix_res=0
-#     igv.residue_dict = {}
-#     phi_fix = []
-#     phi = []
-#     phi_res = []
-#     var_res = []
-    
-    
-#     while ptr < len(lines):
-#         resi = lines[ptr][0]
-#         res_fix = lines[ptr][1]
-#         resform = []
-#         phi_res = 1.0
-#         if res_fix == "default":
-#             fixed_res = 0
-#         elif res_fix == "fixed":
-#             fixed_res = 1
-#             n_fix_res = n_fix_res  + 1
-#             phi_res = float(lines[ptr][2])
-#             phi_fix.append(phi_res)
-#         elif res_fix == "variable":
-#             fixed_res = 2
-#             n_var_res = n_var_res + 1
-#             phi_res = float(lines[ptr][2])
-#             phi.append(phi_res) 
-#             var_res.append(resi)
-#         ptr = ptr + 1
-     
-#         for species in range(n_species):
-#             resform.append(list(map(int,lines[ptr][:natom_types])))
-#             ptr = ptr + 1
-#         entry = {"res_idx":nr, "res_fix":res_fix,"fixed_res":fixed_res,"phi_res":phi_res,
-#                  "resform":resform,"phi_fix":phi_fix,"phi":phi,"var_res":var_res}
-        
-#         igv.residue_dict[resi] = entry
-#         nr = nr + 1
-#     # igv.residue_dict["n_var_atom"] = n_var_atom
-#     # igv.residue_dict["var_atom"] = var_atom
-#     # igv.residue_dict["n_var_res"] = n_var_res
-#     # igv.residue_dict["n_fix_res"] = n_fix_res
-#     # igv.residue_dict["var_res"] = var_res
-#     # igv.residue_dict["phi"] = phi   # print("var_atom",var_atom)
-    
-#     igv.model.n_var_atom = n_var_atom
-#     igv.model.var_atom = var_atom
-#     igv.model.n_var_res = n_var_res
-#     igv.model.n_fix_res = n_fix_res
-#     igv.model.var_res = var_res
-#     igv.model.phi = phi
-#     # return(species_dict,atom_order_dict,atom_fix_dict,residue_dict)
 
 def create_atom_mu():
 # generate mu domain spectra for elements in order for residue definitions
     atom_mu = []   # build array as list
-    igv.atom_keys = list(igv.atom_order_dict.keys())
-    for key in igv.atom_keys:        
-        niso,miso_list,fiso_list = [igv.atom_dict[key][k] for k in ["niso","miso","fiso"]]
-        el_mz = [0] * igv.npt
+    pgv.atom_keys = list(pgv.atom_order_dict.keys())
+    for key in pgv.atom_keys:        
+        niso,miso_list,fiso_list = [pgv.atom_dict[key][k] for k in ["niso","miso","fiso"]]
+        el_mz = [0] * pgc.npt
         for i in range(niso):
-            n=int(miso_list[i]*igv.scale_mz+0.5)
+            n=int(miso_list[i]*pgc.scale_mz+0.5)
             el_mz[n] = fiso_list[i]
         el_mu = rfft(el_mz)
         atom_mu.append(el_mu)
-    igv.atom_mu = np.array(atom_mu)  # convert to numpy array
+    pgv.atom_mu = np.array(atom_mu)  # convert to numpy array
     # return(atom_mu_array)
 
 def initialize_residue_mu(active_residues):
@@ -285,32 +161,32 @@ def initialize_residue_mu(active_residues):
     res_keys = active_residues
     res_fixed_mu = []
     idx = 0
-    igv.res_order_dict = {}
+    pgv.res_order_dict = {}
     for reskey in res_keys:
-        igv.res_order_dict[reskey] = idx
+        pgv.res_order_dict[reskey] = idx
         idx += 1
-        # resform = igv.residue_dict[reskey]["resform"]
+        # resform = pgv.residue_dict[reskey]["resform"]
         resform = [pgv.nt_fragment_dict[label][reskey].mol_form for label in pgv.isotopic_species]
         species_mu = []
         species_var_mu = []
-        for j in range(igv.n_species):
-            res_mu = [1.0 + 0.0j] * igv.ncp  # initialize complex mu
+        for j in range(pgv.n_species):
+            res_mu = [1.0 + 0.0j] * pgc.ncp  # initialize complex mu
             species_var_mu.append(res_mu)
-            # for atomkey in igv.atom_keys:
-            for atom, atidx in igv.atom_order_dict.items():
-                # atidx = igv.atom_order_dict[atomkey]
-                atom_fix,fix,frac = igv.atom_fix_dict[atom]
-                print(reskey, j, atom)
+            # for atomkey in pgv.atom_keys:
+            for atom, atidx in pgv.atom_order_dict.items():
+                # atidx = pgv.atom_order_dict[atomkey]
+                atom_fix,fix,frac = pgv.atom_fix_dict[atom]
+                # print(reskey, j, atom)
                 if fix == 0:
                     if atom not in resform[j]:
                         continue
                     n = resform[j][atom]
-                    amu = list(map(lambda x:pow(x,n),igv.atom_mu[atidx]))
+                    amu = list(map(lambda x:pow(x,n),pgv.atom_mu[atidx]))
                     res_mu = np.multiply(res_mu,amu)
             species_mu.append(res_mu)
         res_fixed_mu.append(species_mu)
-    igv.res_fixed_mu = np.array(res_fixed_mu)    # convert to numpy array
-    igv.res_tot_mu = copy.deepcopy(igv.res_fixed_mu)     # copy for multiplying fixed and var parts       
+    pgv.res_fixed_mu = np.array(res_fixed_mu)    # convert to numpy array
+    pgv.res_tot_mu = copy.deepcopy(pgv.res_fixed_mu)     # copy for multiplying fixed and var parts       
 
 def calculate_mol_form(frag3, label, z):
     mol_form = {}
@@ -331,11 +207,11 @@ def isodist_setup():
     find_active_residues()  
     
     # opts = ["showfit", "showguess"]
-    igv.opts = ["showfit"]
+    # pgv.isodist_plot_options = ["showfit"]
     
-    igv.atomfile = "pytheas_atom_definitions.txt" # atom definition file  = atom_definitions.txt
-    igv.model_file = "pytheas_label_model.txt"
-    igv.isodist_file = "isodist_output.xlsx"
+    # pgv.atomfile = os.path.join(pgv.working_dir, "isodist_atom_definitions.txt") # atom definition file  = atom_definitions.txt
+    # pgv.model_file = os.path.join(pgv.working_dir, "isodist_label_model.txt")
+    # pgv.isodist_file = os.path.join(pgv.working_dir, "sample_data/isodist_output.xlsx")
     
     # mz = np.zeros(0)
     # for i in range(igc.npt):            # mz axis
@@ -343,12 +219,12 @@ def isodist_setup():
     
     #TODO check if 1st point should be zero or, as above
     
-    igv.mz = np.linspace(0, igv.npt/igv.scale_mz, igv.npt)  # calc mz axis
-    igv.cmz = rfftfreq(igv.npt) # complex calc mz axis
+    pgv.mz = np.linspace(0, pgc.npt/pgc.scale_mz, pgc.npt)  # calc mz axis
+    pgv.cmz = rfftfreq(pgc.npt) # complex calc mz axis
     create_atom_dict()  # input atom parameters   jgv.atom_dict
-    create_model() # igv.species_dict  igv.atom_order_dict igv.atom_fix_dict igv.model
+    create_model() # pgv.species_dict  pgv.atom_order_dict pgv.atom_fix_dict pgv.model
     create_atom_mu()  # generate mu domain spectra for atoms  (natom_types, ncp) 
-    initialize_residue_mu(igv.active_residues)  # generate mu domain spectra for residues
+    initialize_residue_mu(pgv.active_residues)  # generate mu domain spectra for residues
     
     initialize_fit_model()
 
@@ -364,17 +240,17 @@ def calc_isodist(x, return_opt, seq, yobs, mz_hd, z):
         xround.append(round(x[i],3))
  
     # calculate mu domain spectra for variable atoms
-    for j in range(igv.model.n_var_atom):
-        atom = igv.model.var_atom[j]   # N15
-        miso_list = igv.atom_dict[atom]["miso"]
-        vidx = igv.atom_order_dict[atom]
+    for j in range(pgv.model.n_var_atom):
+        atom = pgv.model.var_atom[j]   # N15
+        miso_list = pgv.atom_dict[atom]["miso"]
+        vidx = pgv.atom_order_dict[atom]
         fr = x[vidx]
-        el_mz = [0] * igv.npt
-        nu = int(miso_list[0]*igv.scale_mz+0.5)
-        nf = int(miso_list[1]*igv.scale_mz+0.5)
+        el_mz = [0] * pgc.npt
+        nu = int(miso_list[0]*pgc.scale_mz+0.5)
+        nf = int(miso_list[1]*pgc.scale_mz+0.5)
         el_mz[nu] = 1 - fr
         el_mz[nf] = fr
-        igv.atom_mu[vidx] = rfft(el_mz)
+        pgv.atom_mu[vidx] = rfft(el_mz)
      
     active_res = set(list(seq))  # list of active residues to recalc variable part
 
@@ -382,30 +258,30 @@ def calc_isodist(x, return_opt, seq, yobs, mz_hd, z):
     # indices are residue,species 
      
     for reskey in active_res:
-        res_idx = igv.res_order_dict[reskey]
+        res_idx = pgv.res_order_dict[reskey]
         
         resform = []
         for label in pgv.isotopic_species:
             rf = pgv.nt_fragment_dict[label][reskey].mol_form
             resform.append(rf)
             
-        for j in range(igv.model.n_species):
-            res_mu = np.ones(igv.ncp, dtype = complex)
-            for k in range(igv.model.n_var_atom):
-                atom = igv.model.var_atom[k]
-                atidx = igv.atom_order_dict[atom]
-                atom_fix,fix,frc = igv.atom_fix_dict[atom]
+        for j in range(pgv.model.n_species):
+            res_mu = np.ones(pgc.ncp, dtype = complex)
+            for k in range(pgv.model.n_var_atom):
+                atom = pgv.model.var_atom[k]
+                atidx = pgv.atom_order_dict[atom]
+                atom_fix,fix,frc = pgv.atom_fix_dict[atom]
                 if fix == 1:
                     if atom not in resform[j]:
                         continue
                     n = resform[j][atom]
-                    amu = np.ones(igv.ncp,dtype = complex)
+                    amu = np.ones(pgc.ncp,dtype = complex)
                     for nn in range(n):
-                        amu = np.multiply(amu, igv.atom_mu[atidx])
+                        amu = np.multiply(amu, pgv.atom_mu[atidx])
 
                     res_mu = np.multiply(res_mu,amu)
  
-                igv.res_tot_mu[res_idx][j] = np.multiply(igv.res_fixed_mu[res_idx][j],res_mu)         
+                pgv.res_tot_mu[res_idx][j] = np.multiply(pgv.res_fixed_mu[res_idx][j],res_mu)         
     
     baseline = x[0]
     off = x[1]
@@ -413,29 +289,29 @@ def calc_isodist(x, return_opt, seq, yobs, mz_hd, z):
  
     cgw = np.sqrt(2)*(gw + 0.0j)
     gw2p=gw*np.sqrt(2.0*np.pi)
-    cfac_const = 2.0*np.pi*((off+mz_hd)*igv.scale_mz)
+    cfac_const = 2.0*np.pi*((off+mz_hd)*pgc.scale_mz)
 
-    cpft = np.exp((0.0 + igv.cmz*cfac_const*1j))
-    cgft = np.exp(-((igv.cmz +0j)/cgw)**2)/gw2p
+    cpft = np.exp((0.0 + pgv.cmz*cfac_const*1j))
+    cgft = np.exp(-((pgv.cmz +0j)/cgw)**2)/gw2p
     
-    tot_mu = np.zeros(igv.ncp,dtype = complex)   #initialize total spectrum
+    tot_mu = np.zeros(pgc.ncp,dtype = complex)   #initialize total spectrum
     residues = list(seq)
-    for j in range(igv.model.n_species):
-        sp_mu = np.ones(igv.ncp, dtype = complex)  #initialize
+    for j in range(pgv.model.n_species):
+        sp_mu = np.ones(pgc.ncp, dtype = complex)  #initialize
         for reskey in residues:
-            # res_idx = igv.residue_dict[reskey]["res_idx"]
-            res_idx = igv.res_order_dict[reskey]
-            sp_mu = np.multiply(sp_mu, igv.res_tot_mu[res_idx][j])  # accumulate product of residue spectra
+            # res_idx = pgv.residue_dict[reskey]["res_idx"]
+            res_idx = pgv.res_order_dict[reskey]
+            sp_mu = np.multiply(sp_mu, pgv.res_tot_mu[res_idx][j])  # accumulate product of residue spectra
         for k in range(z):
-            sp_mu = np.multiply(sp_mu, np.conj(igv.atom_mu[igv.atom_order_dict['H1']])) # subtract z protons
+            sp_mu = np.multiply(sp_mu, np.conj(pgv.atom_mu[pgv.atom_order_dict['H1']])) # subtract z protons
         sp_mu = np.multiply(sp_mu,cgft)  # gaussian convolution
         sp_mu = np.multiply(sp_mu,cpft)  # heterodyne frequency shift
-        tot_mu = tot_mu + x[igv.model.amp_idx[j]] * sp_mu   # accumulate species
+        tot_mu = tot_mu + x[pgv.model.amp_idx[j]] * sp_mu   # accumulate species
     
         
 # back transform and add baseline
 
-    sp_mz = irfft(tot_mu) * igv.ncp/2 + baseline # normalization applied for consistency with isodist.f
+    sp_mz = irfft(tot_mu) * pgc.ncp/2 + baseline # normalization applied for consistency with isodist.f
    
     if return_opt == "residuals":
     
@@ -444,17 +320,17 @@ def calc_isodist(x, return_opt, seq, yobs, mz_hd, z):
         mz_residuals = []
 
         for i in range(len(yobs)):
-            residuals.append(yobs[i]-sp_mz[igv.mz_ptr[i]])
-            mz_residuals.append(igv.mz[i])
+            residuals.append(yobs[i]-sp_mz[pgv.mz_ptr[i]])
+            mz_residuals.append(pgv.mz[i])
         return(residuals)
     
     elif return_opt == "spectrum":
     
         spectrum =[]
         mz_spectrum = []
-        for i in range(len(igv.mz_ptr)):
-            spectrum.append(sp_mz[igv.mz_ptr[i]])
-            mz_spectrum.append(igv.mz[igv.mz_ptr[i]])
+        for i in range(len(pgv.mz_ptr)):
+            spectrum.append(sp_mz[pgv.mz_ptr[i]])
+            mz_spectrum.append(pgv.mz[pgv.mz_ptr[i]])
 
         mz_spectrum = np.array(mz_spectrum) /z + mz_hd
         spectrum = np.array(spectrum)
@@ -463,107 +339,107 @@ def calc_isodist(x, return_opt, seq, yobs, mz_hd, z):
      
 
 def initialize_fit_model():
-    igv.parlabel = ["B","OFF","GW"]
-    igv.x_init = [1.0, 0.01, 0.003]  # initial values for B, OFF, GW
+    pgv.parlabel = ["B","OFF","GW"]
+    pgv.x_init = [1.0, 0.01, 0.003]  # initial values for B, OFF, GW
     lower_bounds = [-1000.0,-1.0,0.001]
     upper_bounds = [np.inf,1.0,0.03]
     fitpar_idx = 2
     
     # amplitude parameters
     alab = "AMP_"
-    igv.model.amp_idx = []
-    for i in range(igv.model.n_species):
+    pgv.model.amp_idx = []
+    for i in range(pgv.model.n_species):
         fitpar_idx += 1
-        igv.model.amp_idx.append(fitpar_idx)
-        igv.parlabel.append(alab + igv.model.species_lab[i])
-        igv.x_init.append(igv.model.amp[i])
+        pgv.model.amp_idx.append(fitpar_idx)
+        pgv.parlabel.append(alab + pgv.model.species_lab[i])
+        pgv.x_init.append(pgv.model.amp[i])
         lower_bounds.append(0.0)
         upper_bounds.append(np.inf)
     
     # fractional atom parameters
     flab = "FRC_"
-    igv.model.frac_idx = []
-    for i in range(igv.model.n_var_atom):
+    pgv.model.frac_idx = []
+    for i in range(pgv.model.n_var_atom):
         fitpar_idx += 1
-        igv.model.frac_idx.append(fitpar_idx)
-        igv.parlabel.append(flab + igv.model.var_atom[i])
-        igv.x_init.append(igv.model.frac[i])
+        pgv.model.frac_idx.append(fitpar_idx)
+        pgv.parlabel.append(flab + pgv.model.var_atom[i])
+        pgv.x_init.append(pgv.model.frac[i])
         lower_bounds.append(0.0)
         upper_bounds.append(1.0)
     
-    igv.xbounds = (lower_bounds,upper_bounds)
+    pgv.par_err_labels = [l + "_err" for l in pgv.parlabel]
+    pgv.par_relerr_labels = [l + "_re" for l in pgv.parlabel]
+    pgv.frac_lab_labels = ["FRAC_" + l.split("_")[-1] for l in pgv.parlabel if "AMP" in l]
+    pgv.xbounds = (lower_bounds,upper_bounds)
  
-    print("number of params to fit :",len(igv.x_init),igv.x_init)
+    print("number of params to fit :",len(pgv.x_init),pgv.x_init)
      
     # column labels for isodist output
-    igv.column_labels = igv.outlabels + igv.parlabel
-    igv.column_labels = igv.column_labels + ["max_fit","min_fit","max_rsd","min_rsd"]
+    pgv.column_labels = pgc.outlabels + pgv.parlabel + pgv.frac_lab_labels + pgv.par_err_labels + pgv.par_relerr_labels
+    pgv.column_labels = pgv.column_labels + ["max_fit","min_fit","max_rsd","min_rsd"]
     nfit = 11  
     nwr = 23
     for nf in range(nfit):
-        igv.column_labels.append("avg_fit" + str(nf+1))
+        pgv.column_labels.append("avg_fit" + str(nf+1))
     for nw in range(nwr):
-        igv.column_labels.append("avg_wr" + str(nw+1))
+        pgv.column_labels.append("avg_wr" + str(nw+1))
         
 
 def fit_isotope_distribution(match_df_idx):
+    # print("entering fit_isotope_distribution")
     match_row = pgv.top_match_df.loc[match_df_idx]
-    ms = igv.minispec[match_df_idx]
+    ms = pgv.minispec[match_df_idx]
     
     frag3 = match_row["frag3"]
-    seq3 =  frag3[1:-1]
-    # seq = generate_mod_seq(seq3)
     seq = generate_mod_seq_ends(frag3)
     z = abs(ms.z)
     moz = match_row["mz1"]
 
     print("SEQUENCE, z = ", seq, z)
     
-    #TODO eliminate peakfile
-    peakfile = "_".join([str(match_row["ms2_key"]), ms.mol, seq, str(z)]) + ".txt"
+    peak_root = "_".join([str(match_row["ms2_key"]), ms.mol, seq, str(z)])
     seqlab = ms.mol
     
     ri_array = ms.rt_slice  # experimental spectrum
     rmz_array = ms.mini_mz
 
     nmz = 0 # counter to fill experimental arrays
-    igv.mz_ptr = np.zeros(len(rmz_array), dtype = int)
+    pgv.mz_ptr = np.zeros(len(rmz_array), dtype = int)
     xobs = np.zeros(len(rmz_array))
     yobs = np.zeros(len(rmz_array))
     mz_hd = rmz_array[0] * z  # heterodyne mass set to lower bound of mz
     
     # build arrays for fitting, mz_ptr has indices from oversampled theo distribution
     for rmz, ri in zip(rmz_array, ri_array):
-        n = int((rmz * z - mz_hd)*igv.scale_mz + 0.5)
+        n = int((rmz * z - mz_hd)*pgc.scale_mz + 0.5)
 
-        igv.mz_ptr[nmz] = n
-        xobs[nmz] = (rmz * z - mz_hd) * igv.scale_mz
+        pgv.mz_ptr[nmz] = n
+        xobs[nmz] = (rmz * z - mz_hd) * pgc.scale_mz
         yobs[nmz] = ri
         nmz += 1
         
-    # igv.mz_ptr = mz_ptr
-    
-    x_init = igv.x_init.copy()
+    x_init = pgv.x_init.copy()
     x_init[3] = max(yobs)
     x_init[4] = max(yobs)
     
 #TODO are GW and AMP anticorrelated?  
     
-    if "showguess" in igv.opts:     # calc initial guess
+    if "showguess" in pgv.isodist_plot_options:     # calc initial guess
         
         mz_spec, spec = calc_isodist(x_init, "spectrum", frag3, yobs, mz_hd, z)
-        resid = calc_isodist(igv.x_init, "residuals", frag3, 12*yobs, mz_hd, z)
+        resid = calc_isodist(pgv.x_init, "residuals", frag3, 12*yobs, mz_hd, z)
         plot_obs_calc(mz_spec, yobs, mz_spec, spec, seq + " Initial guess")
      
     prelim_end = datetime.now()
     fit_start = prelim_end
+    # print("starting lsq")
 
-    lsq_soln = least_squares(calc_isodist, igv.x_init, verbose = 1, bounds = igv.xbounds, 
+    lsq_soln = least_squares(calc_isodist, pgv.x_init, verbose = 1, bounds = pgv.xbounds, 
                              x_scale = 'jac', max_nfev=100,
                              args =("residuals", frag3, yobs, mz_hd, z))
-
+    # print('done with lsq')
     x_fit = lsq_soln.x
-    chisq = 2.0 *lsq_soln.cost/(igv.sig_global*igv.sig_global*nmz)  # factor of 2 to make cost correpsond to chisquared
+    chisq = 2.0 *lsq_soln.cost/(pgc.sig_global*pgc.sig_global*nmz)  # factor of 2 to make cost correpsond to chisquared
         
     xfit = [float(round(x,6)) for x in x_fit]
     
@@ -571,27 +447,53 @@ def fit_isotope_distribution(match_df_idx):
     print(" solution = ", xfit)
            
     mz_fit, fit = calc_isodist(x_fit, "spectrum", frag3, yobs, mz_hd, z)
-    resid = calc_isodist(igv.x_init, "residuals", frag3, yobs, mz_hd, z)
+    resid = calc_isodist(pgv.x_init, "residuals", frag3, yobs, mz_hd, z)  # can get this from lsq_soln
 
-    if "showfit" in igv.opts:
+    if "showfit" in pgv.isodist_plot_options:
         plot_obs_calc(mz_fit, yobs, mz_fit, fit, seq + " Final Fit")
+   
+    # precalculate frac_lab
+    tot_amp = sum([x for x, l in zip(x_fit,pgv.parlabel) if "AMP" in l])
+    if tot_amp != 0:
+        frac_lab = [x/tot_amp for x, l in zip(x_fit,pgv.parlabel) if "AMP" in l]
+    else:
+        frac_lab = [0 for x, l in zip(x_fit,pgv.parlabel) if "AMP" in l]
+    
+   # parameter errors
+   
+   # Extract the Jacobian and calculate covariance and standard errors
+    J = lsq_soln.jac
+    m = len(rmz_array)  # Number of data points
+    n = len(lsq_soln.x)   # Number of parameters
+    s_squared = 2 * lsq_soln.cost / (m - n) # Estimated variance of residuals
+    
+    # Calculate the covariance matrix
+    try:
+        cov_matrix = np.linalg.inv(J.T @ J) * s_squared
+        # Standard errors
+        perr = np.sqrt(np.diag(cov_matrix))
+        print(f"Fitted parameters: {lsq_soln.x}")
+        print(f"Standard errors of parameters: {perr}")
+    except np.linalg.LinAlgError:
+        print("Could not compute covariance matrix. Check for singular Jacobian.")
+        perr = np.zeros(n)
    
     max_fit, min_fit, max_rsd, min_rsd, avg_fit, avg_wr = calculate_residuals(x_fit, fit, resid)
         
     # assemble output columns
-    column_data = [peakfile, seqlab, seq, moz, z, chisq, mz_hd]
-    column_data = column_data + x_fit.tolist() + [max_fit, min_fit, max_rsd, min_rsd] + avg_fit + avg_wr
+    column_data =[peak_root, seqlab, seq, moz, z, chisq, mz_hd]
+    column_data = column_data + x_fit.tolist() + frac_lab + perr.tolist() + [max_fit, min_fit, max_rsd, min_rsd] + avg_fit + avg_wr
     
-    column_dict = {col:dat for col, dat in zip(igv.column_labels, column_data)}
+    column_dict = {col:dat for col, dat in zip(pgv.column_labels, column_data)}
 
 # todo store this in minispectrum
 
     ms.mz_fit = fit
 
 #TODO make this a function
-    if "plotfit" in igv.opts:
+    if "plotfit" in pgv.isodist_plot_options:
 # write out fit plot
-        plotfile = peakfile.replace(".txt",".png")
+        plotfile = peak_root + ".png"
         plt.plot(mz_fit, yobs,".k")
         plt.ylabel("amplitude")
         plt.xlabel("m/z")
@@ -614,7 +516,7 @@ def calculate_residuals(x_fit, fit, resid):
     resid = - np.array(resid)  # old resid = fit - dat
     fit = np.array(fit)
     
-    # if igv.auto_baseline == "auto":
+    # if pgv.auto_baseline == "auto":
     #     netfit = fit - b
     # else:
     netfit = fit - x_fit[0]
@@ -884,3 +786,36 @@ def plot_obs_calc(obs_x, obs_y, calc_x, calc_y, title):
         plt.title (title)
         plt.plot(calc_x, calc_y,"-b")
         plt.show()
+
+def LoadRT():
+    
+    load_dir = QFileDialog.getExistingDirectory(None,"Select Job Directory", pgv.working_dir)
+    if load_dir == None:
+        return
+    print("loading previous RT files from ", load_dir)
+    load_pickle_set(pgc.isodist_rt_pickle, load_dir)
+    # for obj in pgc.isodist_rt_pickle:
+    #     pickle_file = os.path.join(load_dir, obj + ".pickle")
+    #     load_pickle(obj, pickle_file)
+
+        # setattr(pgv, obj, load_pickle(pickle_file))
+    # load_json_files(pgc.isodist_rt_json, load_dir)    
+    # par_file = glob.glob(os.path.join(load_dir,'*parameters*.xlsx'))[0]
+    # Load_Globals_File(par_file)
+
+def LoadMinispec():
+    
+    load_dir = QFileDialog.getExistingDirectory(None,"Select Job Directory", pgv.working_dir)
+    if load_dir == None:
+        return
+    print("loading previous RT files from ", load_dir)
+    load_pickle_set(pgc.isodist_minispec_pickle, load_dir)
+    # for obj in pgc.isodist_minispec_pickle:
+    #     pickle_file = os.path.join(load_dir, obj + ".pickle")
+    #     load_pickle(obj, pickle_file)
+
+        # setattr(pgv, obj, load_pickle(pickle_file))
+
+    # load_json_files(pgc.isodist_minispec_json, load_dir)    
+    # par_file = glob.glob(os.path.join(load_dir,'*parameters*.xlsx'))[0]
+    # Load_Globals_File(par_file)

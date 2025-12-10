@@ -60,11 +60,13 @@ def labeled_matrix_plot_new(lm, fs, labels, scale, ax):
 
     # row and column labels
     for row in range(lm.nr):
+        
         rs = (lm.nr-row-1) * row_sc   # make rows go from top to bottom
         if "left" in labels:
             ax.text(-coff ,rs + rctr, lm.row_labels[row], size = fss, ha = 'right', va = 'center') # left side
         if "right" in labels:
             ax.text(ncs + coff ,rs + rctr, lm.row_labels[row], size = fss, ha ='left', va = 'center') # right side
+        # print("labeled_matrix_plot_new: row labels ", row, -coff, rs + rctr, lm.row_labels[row])
             
     for col in range(lm.nc):
         cs = col * col_sc
@@ -114,7 +116,7 @@ def matrix_plot_new(lm):
     xscale = xsize
     yscale = ysize
     
-    if pgv.scale_matrix_plots == 'y':
+    if pgv.scale_matrix_plots == 'y' or nr > 100:
         xtarget = 8
         ytarget = 11
         xscale = xsize/xtarget
@@ -171,7 +173,7 @@ def matrix_plot(color_matrix, row_labels, col_labels, text_dict, output_file, lw
     plt.axis('off')
     ax.set_aspect('equal')
 
-    labeled_matrix_plot(color_matrix, row_labels, col_labels, text_dict, fs, pgv.match_sequence_labels, xyscale, ax, lw_matrix)
+    labeled_matrix_plot_new(color_matrix, row_labels, col_labels, text_dict, fs, pgv.match_sequence_labels, xyscale, ax, lw_matrix)
    
     fig_width, fig_height = plt.gcf().get_size_inches()
     pdffile = os.path.join(pgv.job_dir, output_file + ".pdf")
@@ -233,7 +235,7 @@ def make_text_dict(row_labels, col_labels, nc):
     rc_index_dict = {}
 
     if pgv.base_labels_seq_map == "y":
-        for mol, mdict in pgv.molecule_dict.items():
+        for mol, mdict in pgv.mol_dict.items():
             row_idx = row_labels.index(mol)
             midx = 1 
 
@@ -337,9 +339,10 @@ def color_mods(lm, color):
 
 def color_matrix_by_seq(lm, row_idx, fr, to, seq3, n_frags, length, cleavage_box):
     seq3_idx = 0     # sequence index within fragment
+    # print("color_matrix_by_seq: seq3 = ", seq3, fr, to, length)
     for idx in range(fr - 1, to ):    # index in molecule                
         col_idx = idx
-        # print(idx)
+        # print(idx, seq3_idx, row_idx, col_idx)
         lm.color_matrix[row_idx, col_idx] = sequence_color(n_frags, seq3[seq3_idx])
         seq3_idx += 1
         if cleavage_box and idx == to - 1 and idx != length - 1:

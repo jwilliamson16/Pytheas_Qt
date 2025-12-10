@@ -16,7 +16,7 @@ from pytheas_global_vars import pgv, pgc
 from digest_functions import (add_modifications, enzyme_digest, add_precursor_ions,
                             build_frag_dict, build_precursor_dict,  output_digest_file,
                             make_digest_plot, make_long_digest_plot)
-from pytheas_IO import read_pytheas_file, save_json_files
+from pytheas_IO import read_pytheas_file, save_pickle_set
 
 def digest():
 
@@ -54,6 +54,11 @@ def digest():
     print("   ",  nprec, " total precursor ions generated")
 
     print()
+    
+    if len(pgv.unique_frag_dict.keys()) == 0:
+        print("NO FRAGMENTS GENERATED FROM DIGEST...exiting")
+        print()
+        return
     print("STEP 4: NONREDUNDANT FRAGMENTS") 
       
     pgv.frag_dict = build_frag_dict(pgv.unique_frag_dict)
@@ -69,10 +74,15 @@ def digest():
     print("    Number of unique precursor ions: ", len(pgv.unique_precursor_dict))
     print()
     
-    if pgv.output_digest_json == "y":
-        json_dir = os.path.join(pgv.job_dir, "pytheas_json_files")
-        Path(json_dir).mkdir(parents=True, exist_ok=True)
-        save_json_files(pgc.digest_json, json_dir)
+    if pgv.output_digest_pickle == "y":
+        # json_dir = os.path.join(pgv.job_dir, "pytheas_json_files")
+        # Path(json_dir).mkdir(parents=True, exist_ok=True)
+        save_pickle_set(pgc.digest_pickle, pgv.job_dir)
+        # for obj in pgc.digest_pickle:
+        #     pickle_file = os.path.join(pgv.job_dir, obj + ".pickle")
+        #     save_pickle(obj, pickle_file)
+
+        # save_json_files(pgc.digest_json, json_dir)
     
     digest_job = pgv.digest_job.split("_")[-1]
     digest_file = "digest_output" + "_" + digest_job

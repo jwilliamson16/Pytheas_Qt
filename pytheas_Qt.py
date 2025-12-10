@@ -30,12 +30,13 @@ from pytheas_global_vars import pgv, pgc, pgvdict, PGVStrToType, PGVTypeToStr
 from digest import digest
 from match import match
 from match_functions import match_output_keys
-from pytheas_IO import read_pytheas_file, read_json, load_json_files
+from pytheas_IO import read_pytheas_file, load_pickle_set
 from Pytheas_Qt_widgets import (PytheasRadioButtonBar, PytheasCheckBoxBar, PytheasEntry,
                                                 PytheasDirectory, PytheasFile, PytheasFileOutput,
                                                 PytheasLabel, PytheasPanel, PytheasFixedPanel, 
                                                 PytheasOptionPanel, PytheasButton, PytheasButtonPanel)
 from worksheet_functions import write_parameter_worksheet
+from isodist import isodist
 from discovery import discovery
 
 
@@ -161,7 +162,15 @@ def LoadDigest():  # button function
     if load_dir == None:
         return
     print("loading previous digest from ", load_dir)
-    load_json_files(pgc.digest_json, load_dir)    
+    
+    load_pickle_set(pgv.digest_pickle, load_dir)
+    # for obj in pgc.digest_pickle:
+    #     pickle_file = os.path.join(load_dir, obj + ".pickle")
+    #     load_pickle(obj, pickle_file)
+
+
+    # load_pickle_files(pgc.digest_pickle, load_dir)
+    # load_json_files(pgc.digest_json, load_dir)    
     par_file = glob.glob(os.path.join(load_dir,'*parameters*.xlsx'))[0]
     Load_Globals_File(par_file)
     
@@ -170,15 +179,27 @@ def LoadMatch(): # button function
     load_dir = QFileDialog.getExistingDirectory(None,"Select Job Directory", pgv.working_dir)
     if load_dir == None:
         return
-    print("loading previous match from ", load_dir)
-    load_json_files(pgc.match_json, load_dir)
+
+    # load_json_files(pgc.match_json, load_dir)
     par_file = glob.glob(os.path.join(load_dir,'*parameters*.xlsx'))[0]
     # print("par file", par_file)
     Load_Globals_File(par_file)
+    load_dir = pgv.match_job
+    print("loading previous match from ", load_dir)
+    load_pickle_set(pgc.match_pickle, load_dir)
+    # for obj in pgc.match_pickle:
+    #     pickle_file = os.path.join(load_dir, obj + ".pickle")
+    #     load_pickle(obj, pickle_file)
+
     
     load_dir = pgv.digest_job
     print("loading previous digest from ", load_dir)
-    load_json_files(pgc.digest_json, load_dir)
+    load_pickle_set(pgc.digest_pickle, load_dir)
+    # load_json_files(pgc.digest_json, load_dir)
+    # for obj in pgc.digest_pickle:
+    #     pickle_file = os.path.join(load_dir, obj + ".pickle")
+    #     load_pickle(obj, pickle_file)
+
         
 def Quit(): # button function
     sys.exit()
@@ -296,6 +317,23 @@ def matchSpectra(): # main pytheas module
     print()
     logger.close()
 
+def Isodist():
+    logger, next_dir = setup_job_dir("Isodist")
+    pgv.isodist_job = next_dir
+    print("Quantifying fragments by Isodist")
+
+    error = read_standard_files()
+    if error != None:
+        return
+
+    # print("initial mod set", pgv.modification_set)
+    isodist()
+    # print("after discovery", pgv.modification_set)
+    SaveRunParameters("isodist", next_dir)
+   
+    print("Done with Isodist")
+
+
 def Discovery():
     logger, next_dir = setup_job_dir("Discovery")
     pgv.discovery_job = next_dir
@@ -386,7 +424,7 @@ def build_Pytheas_gui():
                 pgv.option_dict[og] = [] # preserves input order
             pgv.option_dict[og].append(key)
     
-            if pgvdict[key]["option_group"] == "input_files" and pgvdict[key]["widget_type"] != "PytheasLabel":
+            if pgvdict[key]["option_group"] == "required_input_files" and pgvdict[key]["widget_type"] != "PytheasLabel":
                 std_file_list.append(key)
             if "rna_mod_defs" in key:   # label files have to be read last
                 label_file_list.append(key)
@@ -447,6 +485,7 @@ def build_Pytheas_gui():
                                           },
                    "Pytheas Modules: ": {"In Silico Digest": inSilicoDigest,
                                          "Match Spectra": matchSpectra, 
+                                         "Isodist": Isodist,
                                          "Discovery": Discovery,
                                          # "Dev": Development,
                                          "Quit": Quit

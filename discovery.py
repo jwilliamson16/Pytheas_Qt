@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 from pytheas_global_vars import pgv, pgc
-from pytheas_IO import read_pytheas_file, save_json_files, load_pickle
+from pytheas_IO import read_pytheas_file, load_pickle, save_pickle_set
 
 from discovery_functions import (build_mass_dict, discover_spectra, discover_spectra_parallel,
                                     unpack_master_discovery_dict, 
@@ -62,11 +62,20 @@ def discovery():
 #TODO  add Sp to validation output
     # validate_discovery()
     
-    json_dir = os.path.join(pgv.job_dir, "pytheas_json_files")
-    Path(json_dir).mkdir(parents=True, exist_ok=True)
- 
-    if pgv.save_discovery_json == 'y':
-        save_json_files(pgc.discovery_json, json_dir)
+    # json_dir = os.path.join(pgv.job_dir, "pytheas_json_files")
+    # Path(json_dir).mkdir(parents=True, exist_ok=True)
+    if pgv.save_discovery_pickle == "y":  # write out json files 
+        save_pickle_set(pgc.discovery_pickle, pgv.job_dir)
+        # json_dir = os.path.join(pgv.job_dir, "pytheas_json_files")
+        # Path(json_dir).mkdir(parents=True, exist_ok=True)
+        # save_json_files(pgc.match_json, json_dir)
+        # for obj in pgc.discovery_pickle:
+        #     pickle_file = os.path.join(pgv.job_dir, obj + ".pickle")
+        #     save_pickle(obj, pickle_file)
+
+    # if pgv.save_discovery_json == 'y':
+        
+    #     save_json_files(pgc.discovery_json, json_dir)
 
 # TODO try to match on sequence
 #     if pgv.plot_sequence_map == 'y':
