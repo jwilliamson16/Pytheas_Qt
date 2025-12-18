@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.gridspec import GridSpec
+from matplotlib import rcParams
+
 from scipy.optimize import curve_fit
 from pyteomics import mgf, mzml
 
@@ -85,97 +87,119 @@ class miniSpectrum:
 
 #TODO mini_mz and rt_list are not the same???
 
-# def read_pythid_file(file):
-#     df = pd.read_csv(file)
-#     print("length = ", len(df))
-#     print("columns = ", df.columns)
-#     return df
-
 
 def gaussian(x, amplitude, mean, std_dev, offset):
         return offset + amplitude * np.exp(-((x - mean)**2) / (2 * std_dev**2))
 
-# def save_rt_json():
-#     with open("rt_index_dict.json", "w") as json_file:
-#         json.dump(pgv.rt_index_dict, json_file, indent=4)
-#     with open("rt_scan_dict.json", "w") as json_file:         # this may convert index to string...
-#         json.dump(pgv.rt_scan_dict, json_file, indent=4)
-#     rt_list_dict = {"rt_list": list(pgv.rt_list)}
-#     mz_exp_dict = {"mz_exp": list(pgv.mz_exp)}
-#     with open("rt_list_dict.json", "w") as json_file:
-#         json.dump(rt_list_dict, json_file, indent=4)
-#     with open("mz_exp_dict.json", "w") as json_file:
-#         json.dump(mz_exp_dict, json_file, indent=4)
+def make_fit_table(ms):
+    rt_pars = ["amp", "ctr", "wid", "b"]
+    rt_par_labels = ["_".join(["rt", p, "fit"]) for p in rt_pars]
+    rt_par_row_labels =  ["_".join(["rt", p]) for p in rt_pars]
+    rt_par_err_labels = ["_".join(["rt", p, "err"]) for p in rt_pars]
+    
+    id_pars = pgv.parlabel
+    id_par_labels = id_pars
+    id_par_row_labels = id_pars
+    id_par_err_labels = ["_".join([ p, "err"]) for p in id_pars]
 
-# def load_rt_json():
-#     with open('rt_index_dict.json', 'r') as file:
-#         pgv.rt_index_dict = json.load(file)
-#     with open('rt_scan_dict.json', 'r') as file:
-#         pgv.rt_scan_dict = json.load(file)
-#     with open('rt_list_dict.json', 'r') as file:
-#         rt_list_dict = json.load(file)
-#     with open('mz_exp_dict.json', 'r') as file:
-#         mz_exp_dict = json.load(file)
-#         pgv.rt_list = np.array(rt_list_dict["rt_list"])
-#         pgv.mz_exp = np.array(mz_exp_dict["mz_exp"])
-        
+    par_labels = id_par_labels + rt_par_labels
+    par_err_labels = id_par_err_labels + rt_par_err_labels
+    
+    col_labels = ["FIT", "ERROR"]
+    row_labels = id_par_row_labels + rt_par_row_labels
 
+    data = [[getattr(ms,par), getattr(ms, perr)] for par, perr in zip(par_labels, par_err_labels)]
+    data = np.round(np.asarray(data), decimals = 4)
+    
+    print("row_labels", row_labels)
+    print("col_labels", col_labels)
+    print("data", data)
+    
+    return row_labels, col_labels, data
+    # row_labels = pars
+    
 
 def plot_minispectrum(ms):
+    
+    pfont = 'Arial'
+    fs = 9    #fontsize for peak labels in points
+    rcParams.update({'font.size': fs, 'font.family': "sans-serif", "font.sans-serif": pfont})
+
     fig = plt.figure(figsize=(8, 8))
     gs = GridSpec(4, 4) # 4x4 grid
     
-    ax_main = fig.add_subplot(gs[1:4, 0:3]) # Takes up rows 1-3, columns 0-2
-    ax_main.contour(ms.mini_mz, ms.rtlist, ms.ms, cmap = "hot_r")
-    # fig.colorbar(contour, ax=ax_main, shrink=0.7) # Add colorbar
+    ax_main = fig.add_subplot(gs[1:4, 0:3]) # Takes up rows 1-3, columns 0-2   contour plot
+    ax_main.contour(ms.mini_mz, ms.mini_rt, ms.ms, cmap = "hot_r")
     ax_main.set_xlabel("m/z")
     ax_main.set_ylabel("RT")
     
-    ax_plotx = fig.add_subplot(gs[0, 0:3], sharex=ax_main) # Top row, shares x-axis with main
-    ax_plotx.plot(ms.mini_mz, ms.rt_slice_sum, ".k")
+    ax_plotx = fig.add_subplot(gs[0, 0:3], sharex=ax_main) # Top row isotope distribution
+    ax_plotx.plot(ms.mini_mz, ms.rt_slice, ".k")
     ax_plotx.plot(ms.mini_mz, ms.mz_fit, "-r")
     ax_plotx.tick_params(axis='x', labelbottom=False) # Hide x-axis labels for top hist
 
-    ax_ploty = fig.add_subplot(gs[1:4, 3], sharey=ax_main) # Rightmost column, shares y-axis with main
-    ax_ploty.plot(ms.mz_slice, ms.rtlist, ".k")
+    ax_ploty = fig.add_subplot(gs[1:4, 3], sharey=ax_main) # Rightmost column ion chromatogram
+    ax_ploty.plot(ms.mz_slice, ms.mini_rt, ".k")
     ax_ploty.plot(ms.fit, ms.mini_rt, "-r")
-    ax_ploty.plot([0,ms.rt_amp_fit],[ms.rt_fit, ms.rt_fit], "--g", label = "rt corrected")
-    ax_ploty.plot([0, ms.rt_amp_fit], [ms.rt_fit + 2 * ms.rt_width_fit, ms.rt_fit + 2 * ms.rt_width_fit],  "--k", label = "2 * sig")
-    ax_ploty.plot([0, ms.rt_amp_fit],[ms.rt_fit - 2 * ms.rt_width_fit, ms.rt_fit - 2 * ms.rt_width_fit],  "--k", label = "2 * sig")
-  
+    ax_ploty.plot([0, max(ms.mz_slice)],[ms.rt, ms.rt],  "-b", label = "rt MS1")
     ax_ploty.tick_params(axis='y', labelleft=False) # Hide x-axis labels for top hist
 
-    plt.suptitle(" ".join([ms.Pytheas_sequence, str(ms.charge), ms.molecule_ID ]))
+    if ms.rt_ctr_fit != 0 :
+        ax_ploty.plot([0,ms.rt_amp_fit],[ms.rt_ctr_fit, ms.rt_ctr_fit], "--g", label = "rt corrected")
+        ax_ploty.plot([0, ms.rt_amp_fit], [ms.rt_ctr_fit + 2 * ms.rt_wid_fit, ms.rt_ctr_fit + 2 * ms.rt_wid_fit],  "--k", label = "+2 * sig")
+        ax_ploty.plot([0, ms.rt_amp_fit],[ms.rt_ctr_fit - 2 * ms.rt_wid_fit, ms.rt_ctr_fit - 2 * ms.rt_wid_fit],  "--k", label = "-2 * sig")
+        ax_ploty.legend()
+    
+    ax_text = fig.add_subplot(gs[0,3]) # Rightmost column, top row  fit parameters
+    ax_text.axis('off')
+    
+    rows, columns, data = make_fit_table(ms)
+    table = ax_text.table(cellText = data, colLabels = columns, rowLabels = rows, 
+                          loc='center', cellLoc = "left")
+    table.auto_set_font_size(False)
+    table.set_fontsize(6)
+    hgt = 0.1
+    cellDict = table.get_celld()
+    for i in range(-1,len(columns)): # row labels are in -1
+         for j in range(0,len(data)+1):
+            if j == 0 and i == -1:
+                continue
+            cellDict[(j,i)].set_height(hgt)
+            cellDict[(j,i)].set_linewidth(0.1)
+    
+    #TODO fix minispec to have modseq
+    plt.suptitle(" ".join([str(ms.ms2_key), generate_mod_seq(ms.frag3), str(ms.z), ms.mol ]))
     plt.tight_layout()
-    plt.show()
-
-def quick_plot_minispectrum(ms):
-    fig = plt.figure(figsize=(8, 8))
-    gs = GridSpec(4, 4) # 4x4 grid
     
-    ax_main = fig.add_subplot(gs[1:4, 0:3]) # Takes up rows 1-3, columns 0-2
-    ax_main.contour(ms.mini_mz, ms.rtlist, ms.ms, cmap = "hot_r")
-    # fig.colorbar(contour, ax=ax_main, shrink=0.7) # Add colorbar
-    ax_main.set_xlabel("m/z")
-    ax_main.set_ylabel("RT")
-    
-    ax_plotx = fig.add_subplot(gs[0, 0:3], sharex=ax_main) # Top row, shares x-axis with main
-    ax_plotx.plot(ms.mini_mz, ms.rt_slice, ".k")
-    # ax_plotx.plot(ms.mini_mz, ms.mz_fit, "-r")
-    ax_plotx.tick_params(axis='x', labelbottom=False) # Hide x-axis labels for top hist
+    plt.savefig("test_mini.png", dpi = 300)
 
-    ax_ploty = fig.add_subplot(gs[1:4, 3], sharey=ax_main) # Rightmost column, shares y-axis with main
-    ax_ploty.plot(ms.mz_slice, ms.rtlist, ".k")
-    # ax_ploty.plot(ms.fit, ms.mini_rt, "-r")
-    # ax_ploty.plot([0,ms.rt_amp_fit],[ms.rt_fit, ms.rt_fit], "--g", label = "rt corrected")
-    # ax_ploty.plot([0, ms.rt_amp_fit], [ms.rt_fit + 2 * ms.rt_width_fit, ms.rt_fit + 2 * ms.rt_width_fit],  "--k", label = "2 * sig")
-    # ax_ploty.plot([0, ms.rt_amp_fit],[ms.rt_fit - 2 * ms.rt_width_fit, ms.rt_fit - 2 * ms.rt_width_fit],  "--k", label = "2 * sig")
+# def quick_plot_minispectrum(ms):
+#     fig = plt.figure(figsize=(8, 8))
+#     gs = GridSpec(4, 4) # 4x4 grid
+    
+#     ax_main = fig.add_subplot(gs[1:4, 0:3]) # Takes up rows 1-3, columns 0-2
+#     ax_main.contour(ms.mini_mz, ms.rtlist, ms.ms, cmap = "hot_r")
+#     # fig.colorbar(contour, ax=ax_main, shrink=0.7) # Add colorbar
+#     ax_main.set_xlabel("m/z")
+#     ax_main.set_ylabel("RT")
+    
+#     ax_plotx = fig.add_subplot(gs[0, 0:3], sharex=ax_main) # Top row, shares x-axis with main
+#     ax_plotx.plot(ms.mini_mz, ms.rt_slice, ".k")
+#     # ax_plotx.plot(ms.mini_mz, ms.mz_fit, "-r")
+#     ax_plotx.tick_params(axis='x', labelbottom=False) # Hide x-axis labels for top hist
+
+#     ax_ploty = fig.add_subplot(gs[1:4, 3], sharey=ax_main) # Rightmost column, shares y-axis with main
+#     ax_ploty.plot(ms.mz_slice, ms.rtlist, ".k")
+#     # ax_ploty.plot(ms.fit, ms.mini_rt, "-r")
+#     # ax_ploty.plot([0,ms.rt_amp_fit],[ms.rt_fit, ms.rt_fit], "--g", label = "rt corrected")
+#     # ax_ploty.plot([0, ms.rt_amp_fit], [ms.rt_fit + 2 * ms.rt_width_fit, ms.rt_fit + 2 * ms.rt_width_fit],  "--k", label = "2 * sig")
+#     # ax_ploty.plot([0, ms.rt_amp_fit],[ms.rt_fit - 2 * ms.rt_width_fit, ms.rt_fit - 2 * ms.rt_width_fit],  "--k", label = "2 * sig")
   
-    ax_ploty.tick_params(axis='y', labelleft=False) # Hide x-axis labels for top hist
+#     ax_ploty.tick_params(axis='y', labelleft=False) # Hide x-axis labels for top hist
 
-    plt.suptitle(" ".join([generate_mod_seq(ms.frag3), str(ms.z), ms.mol]))
-    plt.tight_layout()
-    plt.show()
+#     plt.suptitle(" ".join([ms.ms2_key, generate_mod_seq(ms.frag3), str(ms.z), ms.mol]))
+#     plt.tight_layout()
+#     plt.show()
 
 # def initialize_minispec(file, mz, rt_list):
 #     match_df = read_pythid_file(file)
@@ -217,33 +241,7 @@ def build_rt_indices():
     print("index took: ", datetime.now() - start)
     # pgv.mz_exp = scan["m/z array"]
     pgv.rt_list = np.array(pgv.rt_list)
-    # return rt_index_dict, rt_scan_dict, mz, rt_list
-
-
-
-       # eof = 0
-       # while eof == 0:
-            
-       #      try:
-       #          scan = next(reader)
-       #      except:
-       #          eof = 1
-       #          continue
-       #      if "scanList" in scan.keys():
-    
-       #          rt = float(scan["scanList"]["scan"][0]["scan start time"])
-       #          pgv.rt_list.append(rt)
-       #          pgv.rt_index_dict[ctr] = rt  # index to search thru for minispectra
-       #          pgv.rt_scan_dict[rt] = scan["id"]  # scan index to extract minispectra
-            
-       #      if ctr%100 == 0:
-       #          print(ctr, datetime.now() - start)
-       #      ctr += 1
-    
-   
-
-    
-
+ 
 
 def build_minispec_dict():
     print()
@@ -264,26 +262,23 @@ def build_minispec_dict():
                     pidx_dict[pidx].append(rt)
                 else:
                     pidx_dict[pidx] = [rt]
-                    
-                    
+                                    
     print("rt_dict took: ", datetime.now()-start)  # 2.2 sec
     
     pgv.pidx_list = np.array(list(pidx_dict.keys()))
-
-    # return rt_dict, pidx_list
 
 def extract_minispectra():
     print()
     print("Extracting minispectra")
 
     read_pytheas_file("MS1_data_file")
-    # pgv.MS1_data = mzml.MzML(MS1_data_file)  # 30 sec
+
     start = datetime.now()
     ctr = 0
     n = len(pgv.rt_list)
     
-    # determine type of rt_scan_dict_keys
-    key_type = type(list(pgv.rt_scan_dict.keys())[0])
+    
+    key_type = type(list(pgv.rt_scan_dict.keys())[0])  # determine type of rt_scan_dict_keys
 
 #TODO print out every 100 scans
     for rt in pgv.rt_list:
@@ -308,39 +303,11 @@ def extract_minispectra():
     print("extracting minispectra took: ", datetime.now() - start)
 
 
-# def build_minispectra(pythid_file, ms_data_file):
-# def build_minispectra(ms_data_file):
-#     start = datetime.now()  # 30 sec
-#     print("reading MZML file")
-#     pgv.data = mzml.MzML(ms_data_file)
-#     print(" open mzml took ", datetime.now() - start)
-        
-#     # match_df = read_pythid_file(pythid_file) # should get this from match
-#     pgv.top_match_df = pd.DataFrame.from_dict(pgv.top_match_dict, orient = "index")
-#     pgv.minispec = {idx:miniSpectrum(idx, row) for idx, row in pgv.top_match_df.iterrows()} # fast
-    
-#     pgv.rt_index_dict, pgv.rt_scan_dict, pgv.mz_exp, pgv.rt_list = build_rt_indices(ms_data_file) # 3 minutes
-    
-#     for idx, ms in pgv.minispec.items():
-#         ms.set_mz_window(pgv.mz_exp)  # experimental mz array from last scan
-#         ms.set_rt_window(pgv.rt_list)
-    
-#     pgv.rt_dict, pgv.pidx_list = build_mini_spec_dict(pgv.minispec, pgv.rt_index_dict)
-    
-#     extract_minispectra(pgv.data, pgv.minispec, pgv.rt_scan_dict, pgv.rt_dict, pgv.rt_list)
-    
-    # return minispec
-
-# pythid_file = "/Users/jrwill/prog/Pytheas_Folder/Pytheas_data/human_28S_RNA_for_massacre/Match_Job_099/HEK293T_28S_meth100_T1_P1-A-2_01_14293_massacre.csv"
-# ms_data_file = "/Users/jrwill/prog/Massacre_backup/Massacre_RNA_test_set/HEK293T_28S_meth100_T1_P1-A-2_01_14293.mzML"
-
-# match_df, minispec = build_minispectra(pythid_file, ms_data_file)
-
-
 def fit_rt_peak(idx):
-    parlabels = ["rt_amp", "rt_fit", "rt_wid", "rt_base"]
-    par_err_labels = [l + "_err" for l in parlabels]
-    par_relerr_labels = [l + "re" for l in parlabels]
+    pars = ["amp", "ctr", "wid", "b"]
+    par_labels = ["_".join(["rt", p, "fit"]) for p in pars]
+    par_err_labels = ["_".join(["rt", p, "err"]) for p in pars]
+    par_relerr_labels = ["_".join(["rt", p, "re"]) for p in pars]
     rt_x = pgv.minispec[idx].mini_rt
     rt_y = pgv.minispec[idx].mz_slice
     
@@ -350,22 +317,43 @@ def fit_rt_peak(idx):
     if len(rt_y) > len(rt_x):
         rt_y = rt_y[0:len(rt_x)]
     rt_y = rt_y[0:len(rt_x)]
-    # print("x", len(rt_x), "y", len(rt_y))
+    
     amp = max(rt_y)
     ctr = pgv.minispec[idx].rt
+    print("initial ctr = ", ctr)
     sig = 1.0
     baseline = 0
-    # gaussian(x, amplitude, mean, std_dev, offset)
     initial_guesses = [amp, ctr, sig, baseline]
+
     try:
         params, covariance = curve_fit(gaussian, rt_x, rt_y, p0=initial_guesses)
     except:
         params = np.zeros(4)
         covariance = np.zeros((4,4))
+        
+    if params[1] == 0: # refit 
+        
+        amp = max(rt_y)
+        ctr_idx = np.where(pgv.minispec[idx].mz_slice == amp)[0][0]
+        ctr = pgv.minispec[idx].mini_rt[ctr_idx]
+        print("refitting, ctr = ", ctr)
+        sig = 1.0
+        baseline = 0
+        initial_guesses = [amp, ctr, sig, baseline]
+
+        try:
+            params, covariance = curve_fit(gaussian, rt_x, rt_y, p0=initial_guesses)
+        except:
+            params = np.zeros(4)
+            covariance = np.zeros((4,4))
+
     fit = gaussian(rt_x, *params)
+    residuals = rt_y - fit
+    chi_squared = np.sum((residuals)**2) #
     pgv.minispec[idx].fit = fit
     print("index", idx, "rt fit params", params)
     amp, ctr, sig, baseline = params
+    
     
     perr = np.sqrt(np.diag(covariance))
     if np.inf in perr:
@@ -373,12 +361,19 @@ def fit_rt_peak(idx):
     
     rel_err = np.zeros(4)
     for i in range(len(params)):
-        if perr[i] != 0:
-            rel_err[i] = params[i]/perr[i]
+        if params[i] != 0:
+            rel_err[i] = perr[i]/params[i]
             
-    pgv.minispec[idx].rt_amp_fit, pgv.minispec[idx].rt_fit, pgv.minispec[idx].rt_width_fit, pgv.minispec[idx].baseline = params
+    pars = ["amp", "ctr", "wid", "b"]
+    
+    for p, v in zip(par_labels, params):
+        setattr(pgv.minispec[idx], p, v)
+    for p, v in zip(par_err_labels, perr):
+        setattr(pgv.minispec[idx], p, v)
+    for p, v in zip(par_relerr_labels, rel_err):
+       setattr(pgv.minispec[idx], p, v)
 
-    column_dict = {col:dat for col, dat in zip(parlabels + par_err_labels + par_relerr_labels, params.tolist() + perr.tolist() + rel_err.tolist())}
+    column_dict = {col:dat for col, dat in zip(par_labels + ["rt_chisq"] + par_err_labels + par_relerr_labels, params.tolist() + [chi_squared] + perr.tolist() + rel_err.tolist())}
     
     return column_dict
 
@@ -399,11 +394,11 @@ def fit_rt_peak(idx):
     
 def sum_spectra(idx):
     ms = pgv.minispec[idx]
-    if ms.rt_fit == 0:
+    if ms.rt_ctr_fit == 0:
         ms.rt_slice_sum = ms.rt_slice
     else:
-        rt_lo = ms.rt_fit - 2 * ms.rt_width_fit
-        rt_hi = ms.rt_fit + 2 * ms.rt_width_fit
+        rt_lo = ms.rt_ctr_fit - 2 * ms.rt_wid_fit
+        rt_hi = ms.rt_ctr_fit + 2 * ms.rt_wid_fit
         rt_lo_idx = np.abs(ms.mini_rt - rt_lo).argmin()
         rt_hi_idx = np.abs(ms.mini_rt - rt_hi).argmin()
         spec_sum = np.sum(ms.ms[rt_lo_idx:rt_hi_idx + 1,:], axis = 0)

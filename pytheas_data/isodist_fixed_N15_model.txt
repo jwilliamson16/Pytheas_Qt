@@ -1,0 +1,11 @@
+Unlabeled plus fixed 15N labeled		
+2   =   nspecies
+light  10.0  =   label and initial amplitude species 1
+heavy  10.0  =   label and initial amplitude species 2
+6       =   number of atom types
+C12 default	
+H1 default
+N14 default
+O16 default
+P31 default
+N15 fixed  0.985    =   default value for fixed 

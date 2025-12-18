@@ -28,7 +28,7 @@ from matrix_plot_functions import (Labeled_Matrix, make_mod_text_dict, sequence_
                                    color_matrix_by_seq)
 from mod_seq_functions import (parse_mod_seq, generate_mod_seq, generate_mod_seq_ends,
                                parse_1_letter, generate_molecular_graph)
-
+from matrix_plot_functions import sequence_color
 
 def add_modifications(): # parse raw fasta seq and add modifications
 
@@ -171,16 +171,64 @@ def generate_cut_list(seq3, enzyme):
     if cut_index_list[-1] < last:
         cut_index_list = cut_index_list + [last]
     
-    misses = min(pgv.miss, len(cut_index_list)-2) # of matches - 2 ends
-    cut_list = [[cut_index_list[i], cut_index_list[i+miss + 1], miss] # loop thru cut_index_list for each miss 
-                for miss in range(misses+1) 
-                for i in range(len(cut_index_list) - miss - 1)]
+    return cut_index_list  # [fr:to]
 
-    return cut_list  # [fr:to]
-
-def generate_custom_cut_list(seq3, mol, ufdict, frag_seq_key_list):
+def generate_cut_dict(seq3, enzyme):  # new cleavage algorithm for mapping digest
     
-    #TODO check for sensible range with missed cleavages
+    pattern, cut_idx, end_5, end_3 = [pgv.enzyme_dict[enzyme][key] for key in ["pattern", "cut_idx", "end_5", "end_3"]]
+    
+    match_index_list = []
+    cut_dict = {}
+    idx = 0
+    for patt in pattern :
+        for i in range(len(seq3)):
+            if  patt == seq3[i:i + len(patt)]:
+                cut_dict[i + cut_idx] = {"match_fr": i, "match_to": i + len(patt), "enzyme": enzyme}
+                match_index_list.append(i)
+    
+    if 0 not in cut_dict:
+        cut_dict[0] = {"match_fr": 0, "match_to": 0, "enzyme": "end5"}
+    last = len(seq3)
+    if last not in cut_dict:
+        cut_dict[last] = {"match_fr": last, "match_to": last, "enzyme": "end3"}
+
+    # length = len(seq3)
+    # last = length
+    
+    # cut_index_list = [m + cut_idx for m in match_index_list] # add cut offset from match
+    # if cut_index_list[0] > 0:
+    #     cut_index_list = [0] + cut_index_list
+    # if cut_index_list[-1] < last:
+    #     cut_index_list = cut_index_list + [last]
+    
+    # misses = min(pgv.miss, len(cut_index_list)-2) # of matches - 2 ends
+    misses = min(pgv.miss, len(cut_dict)-2) # of matches - 2 ends
+    
+    cut_index_dict = {}
+    idx = 0
+    cut_index_list = sorted(list(cut_dict.keys()))
+    for miss in range(misses + 1):
+        for i in range(len(cut_index_list) - miss - 1):
+            im = i + miss + 1
+            cut_index_dict[idx] = {"fr": cut_index_list[i], "to": cut_index_list[im], "miss": miss,
+                                  "end1": cut_dict[cut_index_list[i]]["enzyme"], 
+                                  "end2": cut_dict[cut_index_list[im]]["enzyme"],
+                                  "match1_fr": cut_dict[cut_index_list[i]]["match_fr"],
+                                  "match1_to": cut_dict[cut_index_list[i]]["match_to"],
+                                  "match2_fr": cut_dict[cut_index_list[im]]["match_fr"],
+                                  "match2_to": cut_dict[cut_index_list[im]]["match_to"]}
+            idx += 1
+        
+    # cut_list = [[cut_index_list[i], cut_index_list[i+miss + 1], miss] # loop thru cut_index_list for each miss 
+    #             for miss in range(misses+1) 
+    #             for i in range(len(cut_index_list) - miss - 1)]
+
+    return cut_index_dict  # [fr:to]
+
+
+
+def generate_custom_cut_list(seq3):
+    
     cut_list = []
     template_cut_index_list = []
     length = len(seq3)
@@ -195,41 +243,26 @@ def generate_custom_cut_list(seq3, mol, ufdict, frag_seq_key_list):
                 for i in range(len(seq3)):
                     if  patt == seq3[i:i + len(patt)]:
                         match_index_list.append(i)
-            print("match_index_list", mol, key, match_index_list)          
+            # print("match_index_list",key, match_index_list)          
                     
         # cut_index_list = [0] + [m + cut_idx for m in match_index_list] + [last] # add cut offset from match
             template_cut_index_list += [m + cut_idx for m in match_index_list] # add cut offset from match
-            print("template_cut_index_list", template_cut_index_list)
+            # print("template_cut_index_list", template_cut_index_list)
     cut_index_list = sorted(list(set([0] + template_cut_index_list + [last])))  # sorted master list
     # cut_index_list = list(set([0] + template_cut_index_list + [last])) # sorted master list
-    print("cut_index_list", cut_index_list)
-    misses = min(pgv.miss, len(cut_index_list)-2) # of matches - 2 ends
-    cut_list = [[cut_index_list[i], cut_index_list[i+miss + 1], miss] # loop thru cut_index_list for each miss 
-                for miss in range(misses+1) 
-                for i in range(len(cut_index_list) - miss - 1)]
-    
-    print("cut list", mol)
-    print(cut_list)
-    print()
-    process_cut_list(seq3, cut_list, mol, ufdict, frag_seq_key_list)
+    # print("cut_index_list", cut_index_list)    
+    # print(cut_list)
+    # print()
+    return cut_index_list
 
 def generate_random_cut_list(seq3):
     
-    min_length = pgv.nonspecific_min_length
-    max_length = pgv.nonspecific_max_length
+    cut_index_list = list(range(len(seq3)+1))
     
-    length = len(seq3)
-    cut_list = []
-    for fr in range(0, length - min_length + 1):
-        max_to = min(length + 1, fr + max_length)
-        for to in range(fr + min_length, max_to):
-             if 0 < to <= length:
-                cut_list.append([fr, to, -1])
-                    
-    return cut_list
+    return cut_index_list
 
 def process_cut_list(seq3, cut_list, mol, ufdict, frag_seq_key_list):
-     # print("cut_list", cut_list)
+
      for fr,to,miss in cut_list:     
        if fr == 0:
            end5_list = pgv.mol_end5
@@ -248,47 +281,72 @@ def process_cut_list(seq3, cut_list, mol, ufdict, frag_seq_key_list):
                if end3 == "tag":
                    s3 = seq3[fr:to] + ["CTG"]
                else:
+                   print("process_cut_list: fr, to = ", fr, to)
+                   s3 = seq3[fr:to]
+               
+               length = len(s3)
+               if pgv.min_length <= length <= pgv.max_length:
+                   unique_fragment(mol, end5, seq3, end3, fr, to, length, miss, ufdict, frag_seq_key_list)
+
+def process_cut_index_dict(seq3, cut_index_dict, mol, ufdict, frag_seq_key_list):
+     # print("cut_list", cut_list)
+     # for fr,to,miss in cut_list:
+     for idx, cdict in cut_index_dict.items():
+       fr = cdict["fr"]
+       to = cdict["to"]
+       if fr == 0:
+           end5_list = pgv.mol_end5
+       else:
+           end5_list = pgv.frag_end5 # should get this from enzyme dict
+    
+       if pgv.use_iTRAQ == 'y':
+           end3_list = ['tag']
+       else:
+           if to == len(seq3) + 1:  # i think this should be len
+               end3_list = pgv.mol_end3
+           else:
+               end3_list = pgv.frag_end3
+       
+       for end5 in end5_list:
+          for end3 in end3_list:
+               if end3 == "tag":
+                   s3 = seq3[fr:to] + ["CTG"]
+               else:
                    s3 = seq3[fr:to]
                
                length = len(s3)
                if pgv.min_length <= length <= pgv.max_length:
                    # print("process_cut_list: ", mol, end5, end3, fr, to, length, miss)
-                   unique_fragment(mol, end5, seq3, end3, fr, to, length, miss, ufdict, frag_seq_key_list)
+                   print("fragment ", mol, end5, s3, cdict )
+                   # unique_fragment(mol, end5, seq3, end3, fr, to, length, miss, ufdict, frag_seq_key_list)
 
+    #TODO store cleavage info in mol_dict and ufdict
 
 def digest_sequence(mol, mdict, ufdict, enzyme): # process one sequence # digest
      
-     seq3 = mdict["seq3"]
-     frag_seq_key_list = []
-     miss = 0
+    seq3 = mdict["seq3"]
+    frag_seq_key_list = []
+    
+    if enzyme == "none":
+        cut_index_list = [[0, len(seq3), 0]]
+    
+    elif enzyme == "nonspecific":
+        cut_index_list = generate_random_cut_list(seq3)
 
-     if enzyme == "none":
-         fr = 0
-         # to = len(seq3) + 1
-         to = len(seq3)
-         length = len(seq3)
-         end5_list = mdict["mol_5_end"]
-         end3_list = mdict["mol_3_end"]
-          
-         for end5 in end5_list:
-             for end3 in end3_list:
-                 unique_fragment(mol, end5, seq3, end3, fr, to, length, miss, ufdict, frag_seq_key_list)
-         return frag_seq_key_list
-
-     elif enzyme == "nonspecific":
-        cut_list = generate_random_cut_list(seq3)
+    elif enzyme == "custom":
+         cut_index_list =  generate_custom_cut_list(seq3)
         
-     elif enzyme == "custom":
-        # read_pytheas_file("custom_cleavage_file")
-        generate_custom_cut_list(seq3, mol, ufdict, frag_seq_key_list)
-        return frag_seq_key_list
+    else:        
+        cut_index_list = generate_cut_list(seq3, enzyme)
+    
+    misses = min(pgv.miss, len(cut_index_list)-2) # of matches - 2 ends
+    cut_list = [[cut_index_list[i], cut_index_list[i+miss + 1], miss] # loop thru cut_index_list for each miss 
+                for miss in range(misses+1) 
+                for i in range(len(cut_index_list) - miss - 1)]
+    
+    process_cut_list(seq3, cut_list, mol, ufdict, frag_seq_key_list)
         
-     else:        
-          cut_list = generate_cut_list(seq3, enzyme)
-         
-     process_cut_list(seq3, cut_list, mol, ufdict, frag_seq_key_list)
-         
-     return frag_seq_key_list
+    return frag_seq_key_list
 
 def add_precursor_ions(frag_dict, z_limit): # zlimit is specific z or "all" to take from charge tables # digest
     nprec = 0
@@ -307,9 +365,6 @@ def add_precursor_ions(frag_dict, z_limit): # zlimit is specific z or "all" to t
         idx += 1
                
     return nprec
-
-
-
 
 def calculate_m0_mz1(G, label, seq3n, z_limit): 
 
@@ -523,3 +578,152 @@ def make_long_digest_plot(output_file):  # plot long sequences as blocks of 100,
         lm.output_file = output_file + "_" + molecule
         lm.title = "Digest Plot for " + molecule + " in " + pgv.fasta_file
         matrix_plot_new(lm)
+        
+def make_seq_coverage_plot(mol, output_file):
+    
+    # determine matrix dimensions nr = n_seq, nc = max_seq_len
+    max_seq_len = 0
+    nrows = 0
+    max_rows = 30
+    mdict = pgv.mol_dict[mol]
+    # for mol, mdict in pgv.mol_dict.items():
+    slen = len(mdict["seq3"])
+        # if slen > max_seq_len:
+    max_seq_len = slen
+    seqmat = np.zeros((max_rows,slen))
+    boxmat = np.zeros((max_rows,slen))
+    
+    for f, fdict in pgv.frag_dict.items():
+        if fdict["frag_type"] != "target": # skip decoys
+            continue
+        seq_list = fdict["seq_list"]
+        n_frags = len(seq_list)
+        seq3 = fdict["frag3"][1:-1]
+        # print("frag", f, seq_list)
+        for seq in seq_list:
+            frag_mol, r, _ = seq.split(":")
+            if frag_mol != mol:
+                continue
+            # length = len(pgv.mol_dict[mol]["raw_seq"])
+            fr, to = map(int,r.split("_"))   # these are sequence indices
+            print(seq,fr,to)
+            enuff_rows = False
+            for i in range(max_rows):
+                print("row", i)
+                ok = sum(seqmat[i,fr-1:to])
+                if ok == 0:
+                    seqmat[i,fr-1:to] = np.ones(to-fr + 1)
+                    boxmat[i,to-1] = 7
+                    nrows = max(nrows,i)
+                    enuff_rows = True
+                    break
+            if not enuff_rows:
+                print("not enough rows")
+    
+    
+                
+                
+            # row_idx = row_labels.index(mol)
+
+
+    # n_seq = len(list(pgv.mol_dict.keys()))
+
+    # row_labels = [mol for mol in range(nrows + 1)]
+    row_labels = list(range(nrows + 1 ))
+    col_labels = [i + 1 for i in range(slen)]
+    
+    lm = Labeled_Matrix(row_labels, col_labels)
+    # pad_end3_gray(lm)
+    # lm.text_dict = make_text_dict(row_labels, col_labels, 100)
+    lm.text_dict = make_seq_coverage_text_dict(mol, row_labels, col_labels, slen)
+    # color_mods(lm, pgc.red) # default color is red
+    
+    # def color_mods(lm, color):
+    for key, mdict in pgv.mod_dict.items():
+        molecule = mdict["Molecule"]
+        if molecule != mol:
+            continue
+        idx = mdict["Position"]
+        for row_idx in row_labels:
+            col_idx = idx - 1
+            lm.color_matrix[row_idx, col_idx] = pgc.red
+
+    
+    cleavage_box = True
+    seq3 = pgv.mol_dict[mol]["seq3"]
+    for row_idx in range(nrows + 1):
+        for col_idx in range(slen):
+            if seqmat[row_idx,col_idx] == 1:
+                # lm.color_matrix[row_idx, col_idx] = pgc.dark_blue
+                lm.color_matrix[row_idx, col_idx] = sequence_color(1, seq3[col_idx])
+                print("color_mat: ", row_idx, col_idx, seq3[col_idx], sequence_color(1,seq3[col_idx]))
+                if cleavage_box and boxmat[row_idx, col_idx] == 7:
+                    lm.lw_matrix[row_idx, col_idx] = 7
+
+
+    # for f, fdict in pgv.frag_dict.items():
+    #     if fdict["frag_type"] != "target": # skip decoys
+    #         continue
+    #     seq_list = fdict["seq_list"]
+    #     n_frags = len(seq_list)
+    #     seq3 = fdict["frag3"][1:-1]
+    #     # print("frag", f, seq_list)
+    #     for seq in seq_list:
+    #         frag_mol, r, _ = seq.split(":")
+    #         if frag_mol != mol:
+    #             continue
+    #         # length = len(pgv.mol_dict[mol]["raw_seq"])
+            
+    #         row_idx = row_labels.index(mol)
+    #         for row_idx in range(nrows + 1):
+    #             fr, to = map(int,r.split("_"))   # these are sequence indices
+                
+    #             # print(row_idx, fr, to, seq3, n_frags )
+    #             color_matrix_by_seq(lm, row_idx, fr, to, seq3, 1, slen, cleavage_box)
+    
+    lm.output_file = output_file
+    lm.title = "Digest Plot for " + pgv.fasta_file
+    lm.row_labels = [str(r) for r in row_labels]
+    lm.col_labels = [str(c) for c in col_labels]
+    matrix_plot_new(lm)       
+
+
+def make_seq_coverage_text_dict(mol, row_labels, col_labels, nc):
+    seq_text_dict = {} # text for modified positions
+    idx = 0
+    raw_seq = pgv.mol_dict[mol]["raw_seq"]
+    rc_index_dict = {}
+    print(col_labels)
+
+    if pgv.base_labels_seq_map == "y":
+        for row_idx in row_labels:
+            # row_idx = row_labels.index(mol)
+            midx = 1 
+
+            for base in raw_seq:
+                col_idx = midx - 1
+                seq_text_dict[idx] = {"row": row_idx, "col": col_idx, "text": base}
+                rc_index_dict[str(col_idx) + "_" + str(row_idx)] = idx  # index to find mod positions for over_write
+                midx += 1
+                idx += 1
+                
+    for mod, mdict in pgv.mod_dict.items():
+        # mpos = str(mdict["Position"])
+        mpos = mdict["Position"]
+        mmol = mdict["Molecule"]
+        if mmol != mol:
+            continue
+        print(mod, mpos)
+        col_idx = col_labels.index(mpos)
+        # row_idx = row_labels.index(mol)
+        for row_idx in row_labels:
+            if str(col_idx) + "_" + str(row_idx) in rc_index_dict:
+                midx = rc_index_dict[str(col_idx) + "_" + str(row_idx)]
+            else:
+                midx = idx
+            mbase = pgv.nt_def_dict[mdict["ID"]]["Pytheas_ID"]
+            seq_text_dict[midx] = {"row": row_idx, "col": col_idx, "text": mbase}
+            idx += 1
+
+    return seq_text_dict
+

@@ -161,9 +161,11 @@ def LoadDigest():  # button function
     load_dir = QFileDialog.getExistingDirectory(None,"Select Job Directory", pgv.working_dir)
     if load_dir == None:
         return
+    # if pgv.working_dir not in load_dir:
+    load_dir = os.path.join(pgv.working_dir, load_dir)
     print("loading previous digest from ", load_dir)
-    
-    load_pickle_set(pgv.digest_pickle, load_dir)
+ 
+    load_pickle_set(pgc.digest_pickle, load_dir)
     # for obj in pgc.digest_pickle:
     #     pickle_file = os.path.join(load_dir, obj + ".pickle")
     #     load_pickle(obj, pickle_file)
@@ -179,12 +181,12 @@ def LoadMatch(): # button function
     load_dir = QFileDialog.getExistingDirectory(None,"Select Job Directory", pgv.working_dir)
     if load_dir == None:
         return
-
+    print("load_dir: ", load_dir)
     # load_json_files(pgc.match_json, load_dir)
     par_file = glob.glob(os.path.join(load_dir,'*parameters*.xlsx'))[0]
     # print("par file", par_file)
     Load_Globals_File(par_file)
-    load_dir = pgv.match_job
+    # load_dir = pgv.match_job
     print("loading previous match from ", load_dir)
     load_pickle_set(pgc.match_pickle, load_dir)
     # for obj in pgc.match_pickle:
@@ -193,6 +195,7 @@ def LoadMatch(): # button function
 
     
     load_dir = pgv.digest_job
+    load_dir = os.path.join(pgv.working_dir, load_dir)
     print("loading previous digest from ", load_dir)
     load_pickle_set(pgc.digest_pickle, load_dir)
     # load_json_files(pgc.digest_json, load_dir)

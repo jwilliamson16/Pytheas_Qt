@@ -16,8 +16,8 @@ import os
 # import copy
 # import time
 from datetime import datetime
-
-start = datetime.now()
+from pathlib import Path
+from copy import deepcopy
 
 # package_dir = "/Users/jrwill/prog/Pytheas_Folder/Pytheas_Qt_root/pytheas_dev/"
 pytheas_dir =  "/Users/jrwill/prog/Pytheas_Folder/Pytheas_Qt_root/Pytheas_Qt/"
@@ -37,11 +37,12 @@ from isodist_functions import (create_atom_dict, create_model,
                                calculate_residuals, calculate_mol_form, 
                                plot_obs_calc, find_active_residues, 
                                initialize_fit_model, fit_isotope_distribution, 
-                               isodist_setup, LoadRT, LoadMinispec)
+                               isodist_setup, Load_thru_RT, Load_thru_Minispec,
+                               Load_thru_RT_fit)
 
 from minispectrum_functions import (miniSpectrum, plot_minispectrum, build_rt_indices, 
                                     build_minispec_dict, extract_minispectra,
-                                    fit_rt_peak, sum_spectra, quick_plot_minispectrum)
+                                    fit_rt_peak, sum_spectra)
 
 # from mod_seq_functions import parse_mod_seq, generate_mod_seq
 from pytheas_global_vars import pgv,pgc
@@ -52,7 +53,8 @@ def isodist():
 
     # STEP 1:  read MS1 datafile
     
-    step1_start = datetime.now()
+    start = datetime.now()
+
     # MS1_data_file = "/Users/jrwill/prog/Massacre_backup/Massacre_RNA_test_set/HEK293T_28S_meth100_T1_P1-A-2_01_14293.mzML"
     
     # print("STEP 1:  reading mzML file")
@@ -76,28 +78,16 @@ def isodist():
     # rt_json_dir =  os.path.join(pgv.job_dir, "isodist_json_files")
     # rt_json_dir =  pgv.job_dir
     if pgv.load_rt_dict == "y":
-        LoadRT()
+        Load_thru_RT()
         
-        # pgv.rt_list = np.array(pgv.rt_list_dict["rt_list"])
-        # pgv.mz_exp = np.array(pgv.mz_exp_dict["mz_exp"])
-        # load_json_files(pgc.isodist_json, rt_json_dir)
-        # load_rt_json()
     else: 
         build_rt_indices() # 3 minutes -> 
         # pgv.rt_list_dict = {"rt_list": list(pgv.rt_list)}
         # pgv.mz_exp_dict = {"mz_exp": list(pgv.mz_exp)}
         save_pickle_set(pgc.isodist_rt_pickle, pgv.job_dir)
-        # for obj in pgc.isodist_rt_pickle:
-        #     pickle_file = os.path.join(pgv.job_dir, obj + ".pickle")
-        #     save_pickle(obj, pickle_file)
-            
-
-        # save_json_files(pgc.isodist_json, rt_json_dir)
-        # save_rt_json()
 
     #TODO   check for file, read if there, if not calculate and save
     
-    # load_rt_json()
     step2_end = datetime.now()
     
     # STEP3:  build minispectra
@@ -110,65 +100,73 @@ def isodist():
     build_minispec_dict()
     
     #TODO  check for file, read if there, if not calculate and save
-    minispectra_pkl = os.path.join(pgv.job_dir, "minispectra.pkl")
     if pgv.load_minispectra == "y":
-        LoadMinispec()
-        # pgv.minispec = load_pickle(minispectra_pkl)
+        Load_thru_Minispec()
     else:
         extract_minispectra()
         save_pickle_set(pgc.isodist_minispec_pickle, pgv.job_dir)
-        # for obj in pgc.isodist_minispec_pickle:
-        #     pickle_file = os.path.join(pgv.job_dir, obj + ".pickle")
-        #     save_pickle(obj, pickle_file)
-    
+      
     step3_end = datetime.now()
     
-    # STEP 4:  fit RT and isotope distribution
+    # STEP 4:  fit RT profile
     print()
-    print("STEP 4:  fitting RT profiles and isotope distributions")
+    print("STEP 4:  fitting RT profiles")
     #TODO QC on RT peak fits   45 /1440 don't fit
     
-    rt_data_rows = []
-    for i in pgv.minispec.keys():
-        rt_data_rows.append(fit_rt_peak(i))
+    if pgv.load_rt_fit == "y":
+        Load_thru_RT_fit()
+    else:
+        rt_data_rows = []
+        for i in pgv.minispec.keys():
+            rt_data_rows.append(fit_rt_peak(i))
+        
+        for i in pgv.minispec.keys():
+            sum_spectra(i)
+        
+        pgv.minispec_rt = pgv.minispec.copy()
+        save_pickle_set(pgc.isodist_rt_fit_pickle, pgv.job_dir)
+        step4_end = datetime.now()
     
-    for i in pgv.minispec.keys():
-        sum_spectra(i)
     
-    
-    # ISODIST setup
-    
+    # STEP 5:  Isodist fitting
+    print()
+    print("STEP5: fitting of isotope distributions")
     isodist_setup()
     
     data_rows = [] # hold column data to build dataframe
     ctr = 0
     nspec = len(pgv.minispec)
+    
+    if "plotfit" in pgv.isodist_plot_options:
+        pgv.isodist_plot_dir = os.path.join(pgv.job_dir, "isodist_plot_dir")
+        Path(pgv.isodist_plot_dir).mkdir(parents=True, exist_ok=True)
+    
     for i in pgv.minispec.keys():
         print()
         print("############## fitting # ", ctr, " of ", nspec, " key = ", i)
         data_rows.append(fit_isotope_distribution(i))
         ctr += 1
     
+    pgv.minispec_isodist = pgv.minispec.copy()
+    save_pickle_set(pgc.isodist_fit_pickle, pgv.job_dir)
+    
     isodist_df = pd.DataFrame(data_rows)
     rt_df = pd.DataFrame(rt_data_rows)
     merged_df = pgv.top_match_df.join(rt_df.set_index(pgv.top_match_df.index))
     merged_df2 = merged_df.join(isodist_df.set_index(pgv.top_match_df.index))
     
-    
     isodist_job = pgv.job_dir.split("_")[-1]
     isodist_output = os.path.join(pgv.job_dir, "isodist_output_" + isodist_job + ".xlsx")
     merged_df2.to_excel(isodist_output)
     
-    step4_end = datetime.now()
-    
-    #TODO should save minispectra again after fitting
+    step5_end = datetime.now()
     
     print()
-    print("Step 1 time = ", step1_end - start)
-    print("Step 2 time = ", step2_end - step1_end)
-    print("Step 3 time = ", step3_end - step2_end)
-    print("Step 4 time = ", step4_end - step3_end)
-    # print("Step 5 time = ", step5_end - step4_end)
+    print("Step 1 time (initialize minispec) = ", step1_end - start)
+    print("Step 2 time (initialize RT indices) = ", step2_end - step1_end)
+    print("Step 3 time = (extract minispectra)", step3_end - step2_end)
+    print("Step 4 time (fit RT profiles) = ", step4_end - step3_end)
+    print("Step 5 time (fit isotope distributions) = ", step5_end - step4_end)
     print("TOTAL TIME = ", datetime.now() - start)
     # merged_df.to_excel(igv.isodist_file, index=False)
     # igv.csvfile.close()

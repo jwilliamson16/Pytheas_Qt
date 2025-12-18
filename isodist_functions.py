@@ -21,6 +21,7 @@ from pytheas_global_vars import pgv, pgc
 from pytheas_IO import read_pytheas_file, load_pickle_set
 
 from mod_seq_functions import generate_mod_seq, generate_mod_seq_ends
+from minispectrum_functions import plot_minispectrum
 from PyQt5.QtWidgets import  QFileDialog
 
 
@@ -41,12 +42,11 @@ def find_active_residues():
     print("active residues: ", pgv.active_residues)
 
 
+#TODO integrate this with pgv.atomic_dict
 def create_atom_dict():
     
     read_pytheas_file("isodist_atomdef_file")
     lines = pgv.text_lines.copy()
-    # with open(pgv.atomfile) as file:
-    #         lines = [line.strip().split() for line in file]
 
     nl = 0
     pgv.atom_dict = {}
@@ -66,12 +66,8 @@ def create_atom_dict():
         atom_entry = {"niso": niso, "miso": miso_list,"fiso": fiso_list, "comment": atom_comment}
         pgv.atom_dict[atom_symb] = atom_entry
         
-    # return(atom_dict)
-
 def create_model():
 
-    # with open(pgv.model_file) as file:
-    #         lines = [line.strip().split() for line in file]
     read_pytheas_file("isodist_modeldef_file")
     lines = pgv.text_lines.copy()
 
@@ -92,7 +88,6 @@ def create_model():
         ptr = ptr + 1
     natom_types = int(lines[ptr][0])
     ptr = ptr + 1
-    
     
     pgv.species_dict["n_species"] = n_species
     pgv.species_dict["species_lab"] = species_lab
@@ -126,7 +121,6 @@ def create_model():
         ptr = ptr + 1
     pgv.species_dict["frac"] = frac
     
-    # print("constructing model")
     pgv.model = ISODIST_MODEL(pgv.species_dict)
     
 
@@ -154,7 +148,6 @@ def create_atom_mu():
         el_mu = rfft(el_mz)
         atom_mu.append(el_mu)
     pgv.atom_mu = np.array(atom_mu)  # convert to numpy array
-    # return(atom_mu_array)
 
 def initialize_residue_mu(active_residues):
     res_keys = [key for key in active_residues if len(key) == 1]
@@ -206,12 +199,6 @@ def calculate_mol_form(frag3, label, z):
 def isodist_setup():
     find_active_residues()  
     
-    # opts = ["showfit", "showguess"]
-    # pgv.isodist_plot_options = ["showfit"]
-    
-    # pgv.atomfile = os.path.join(pgv.working_dir, "isodist_atom_definitions.txt") # atom definition file  = atom_definitions.txt
-    # pgv.model_file = os.path.join(pgv.working_dir, "isodist_label_model.txt")
-    # pgv.isodist_file = os.path.join(pgv.working_dir, "sample_data/isodist_output.xlsx")
     
     # mz = np.zeros(0)
     # for i in range(igc.npt):            # mz axis
@@ -367,14 +354,15 @@ def initialize_fit_model():
         lower_bounds.append(0.0)
         upper_bounds.append(1.0)
     
-    pgv.par_err_labels = [l + "_err" for l in pgv.parlabel]
-    pgv.par_relerr_labels = [l + "_re" for l in pgv.parlabel]
-    pgv.frac_lab_labels = ["FRAC_" + l.split("_")[-1] for l in pgv.parlabel if "AMP" in l]
+    pgv.par_err_labels = [l + "_err" for l in pgv.parlabel]  # parameter errors from fit
+    pgv.par_relerr_labels = [l + "_re" for l in pgv.parlabel] # relative errors
+    pgv.frac_lab_labels = ["FRAC_" + l.split("_")[-1] for l in pgv.parlabel if "AMP" in l] # frac_lab values
     pgv.xbounds = (lower_bounds,upper_bounds)
  
     print("number of params to fit :",len(pgv.x_init),pgv.x_init)
      
     # column labels for isodist output
+
     pgv.column_labels = pgc.outlabels + pgv.parlabel + pgv.frac_lab_labels + pgv.par_err_labels + pgv.par_relerr_labels
     pgv.column_labels = pgv.column_labels + ["max_fit","min_fit","max_rsd","min_rsd"]
     nfit = 11  
@@ -386,7 +374,6 @@ def initialize_fit_model():
         
 
 def fit_isotope_distribution(match_df_idx):
-    # print("entering fit_isotope_distribution")
     match_row = pgv.top_match_df.loc[match_df_idx]
     ms = pgv.minispec[match_df_idx]
     
@@ -432,12 +419,10 @@ def fit_isotope_distribution(match_df_idx):
      
     prelim_end = datetime.now()
     fit_start = prelim_end
-    # print("starting lsq")
 
     lsq_soln = least_squares(calc_isodist, pgv.x_init, verbose = 1, bounds = pgv.xbounds, 
                              x_scale = 'jac', max_nfev=100,
                              args =("residuals", frag3, yobs, mz_hd, z))
-    # print('done with lsq')
     x_fit = lsq_soln.x
     chisq = 2.0 *lsq_soln.cost/(pgc.sig_global*pgc.sig_global*nmz)  # factor of 2 to make cost correpsond to chisquared
         
@@ -470,19 +455,42 @@ def fit_isotope_distribution(match_df_idx):
     # Calculate the covariance matrix
     try:
         cov_matrix = np.linalg.inv(J.T @ J) * s_squared
-        # Standard errors
-        perr = np.sqrt(np.diag(cov_matrix))
+        
+        perr = np.sqrt(np.diag(cov_matrix))    # Standard errors
         print(f"Fitted parameters: {lsq_soln.x}")
         print(f"Standard errors of parameters: {perr}")
     except np.linalg.LinAlgError:
         print("Could not compute covariance matrix. Check for singular Jacobian.")
         perr = np.zeros(n)
    
-    max_fit, min_fit, max_rsd, min_rsd, avg_fit, avg_wr = calculate_residuals(x_fit, fit, resid)
+    rel_err = np.zeros(n)
+    for i in range(n):
+        if x_fit[i] != 0:
+            rel_err[i] = perr[i]/x_fit[i]
         
+    max_fit, min_fit, max_rsd, min_rsd, avg_fit, avg_wr = calculate_residuals(x_fit, fit, resid)
+    
+    pars = pgv.parlabel
+    par_labels = pars
+    # par_labels = ["_".join(["rt", p, "fit"]) for p in pars]
+    par_err_labels = ["_".join([p, "err"]) for p in pars]
+    # par_err_labels = [l + "_err" for l in parlabels]
+    par_relerr_labels = ["_".join([p, "re"]) for p in pars]
+    # par_relerr_labels = [l + "re" for l in parlabels]
+    
+    for p, v in zip(par_labels, x_fit):
+        setattr(ms, p, v)
+    for p, v in zip(par_err_labels, perr):
+        setattr(ms, p, v)
+    for p, v in zip(par_relerr_labels, rel_err):
+       setattr(ms, p, v)
+
+    
+    
+    
     # assemble output columns
     column_data =[peak_root, seqlab, seq, moz, z, chisq, mz_hd]
-    column_data = column_data + x_fit.tolist() + frac_lab + perr.tolist() + [max_fit, min_fit, max_rsd, min_rsd] + avg_fit + avg_wr
+    column_data = column_data + x_fit.tolist() + frac_lab + perr.tolist() + rel_err.tolist() + [max_fit, min_fit, max_rsd, min_rsd] + avg_fit + avg_wr
     
     column_dict = {col:dat for col, dat in zip(pgv.column_labels, column_data)}
 
@@ -493,14 +501,15 @@ def fit_isotope_distribution(match_df_idx):
 #TODO make this a function
     if "plotfit" in pgv.isodist_plot_options:
 # write out fit plot
-        plotfile = peak_root + ".png"
-        plt.plot(mz_fit, yobs,".k")
-        plt.ylabel("amplitude")
-        plt.xlabel("m/z")
-        plt.title(seq + " m0 = " + str(round(mz_hd,3)))
-        plt.plot(mz_fit, fit, "-r")
-        plt.savefig(plotfile)
-        plt.clf()
+        plotfile = os.path.join(pgv.isodist_plot_dir, peak_root + ".png")
+        plot_minispectrum(ms)
+        # plt.plot(ms.mini_mz, yobs,".k")
+        # plt.ylabel("amplitude")
+        # plt.xlabel("m/z")
+        # plt.title(seq + " m0 = " + str(round(mz_hd,3)))
+        # plt.plot(ms.mini_mz, fit, "-r")
+        plt.savefig(plotfile, dpi = 300)
+        
 
     return column_dict
 
@@ -787,35 +796,53 @@ def plot_obs_calc(obs_x, obs_y, calc_x, calc_y, title):
         plt.plot(calc_x, calc_y,"-b")
         plt.show()
 
-def LoadRT():
+def Load_thru_RT():
     
     load_dir = QFileDialog.getExistingDirectory(None,"Select Job Directory", pgv.working_dir)
     if load_dir == None:
         return
     print("loading previous RT files from ", load_dir)
     load_pickle_set(pgc.isodist_rt_pickle, load_dir)
-    # for obj in pgc.isodist_rt_pickle:
-    #     pickle_file = os.path.join(load_dir, obj + ".pickle")
-    #     load_pickle(obj, pickle_file)
 
-        # setattr(pgv, obj, load_pickle(pickle_file))
-    # load_json_files(pgc.isodist_rt_json, load_dir)    
-    # par_file = glob.glob(os.path.join(load_dir,'*parameters*.xlsx'))[0]
-    # Load_Globals_File(par_file)
-
-def LoadMinispec():
+def Load_thru_Minispec():
     
     load_dir = QFileDialog.getExistingDirectory(None,"Select Job Directory", pgv.working_dir)
     if load_dir == None:
         return
     print("loading previous RT files from ", load_dir)
+    load_pickle_set(pgc.isodist_rt_pickle, load_dir)
+    print("loading previous minispec from ", load_dir)
     load_pickle_set(pgc.isodist_minispec_pickle, load_dir)
-    # for obj in pgc.isodist_minispec_pickle:
-    #     pickle_file = os.path.join(load_dir, obj + ".pickle")
-    #     load_pickle(obj, pickle_file)
-
-        # setattr(pgv, obj, load_pickle(pickle_file))
-
-    # load_json_files(pgc.isodist_minispec_json, load_dir)    
-    # par_file = glob.glob(os.path.join(load_dir,'*parameters*.xlsx'))[0]
-    # Load_Globals_File(par_file)
+    
+def Load_thru_RT_fit():
+    
+    load_dir = QFileDialog.getExistingDirectory(None,"Select Job Directory", pgv.working_dir)
+    if load_dir == None:
+        return
+    print("loading previous RT files from ", load_dir)
+    load_pickle_set(pgc.isodist_rt_pickle, load_dir)
+    print("loading previous minispec from ", load_dir)
+    load_pickle_set(pgc.isodist_minispec_pickle, load_dir)
+    print("loading previous RT_fit from ", load_dir)
+    load_pickle_set(pgc.isodist_rtfit_pickle, load_dir)
+    
+    pgv.minispec = pgv.minispec_rt.copy()
+    
+def Load_thru_Isodist():
+    
+    load_dir = QFileDialog.getExistingDirectory(None,"Select Job Directory", pgv.working_dir)
+    if load_dir == None:
+        return
+    print("loading previous RT files from ", load_dir)
+    load_pickle_set(pgc.isodist_rt_pickle, load_dir)
+    print("loading previous minispec from ", load_dir)
+    load_pickle_set(pgc.isodist_minispec_pickle, load_dir)
+    # print("loading previous RT_fit from ", load_dir)
+    # load_pickle_set(pgc.isodist_rtfit_pickle, load_dir)
+    print("loading previous isodist fit from ", load_dir)
+    load_pickle_set(pgc.isodist_fit_pickle, load_dir)
+    
+    pgv.minispec = pgv.minispec_isodist.copy()
+   
+    
+    

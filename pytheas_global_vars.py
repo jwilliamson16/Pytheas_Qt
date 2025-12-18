@@ -94,6 +94,8 @@ class PGC: # class for global constants
   
         isodist_rt_pickle = ["rt_index_dict", "rt_scan_dict", "rt_list", "mz_exp"]
         isodist_minispec_pickle = ["rt_dict", "minispec"]
+        isodist_rt_fit_pickle = ["minispec_rt"]
+        isodist_fit_pickle = ["minispec_isodist"]
         
         # discovery_json = ["master_discovery", "unpacked_discovery", "discovery",
         #                      "iso_mass"]
