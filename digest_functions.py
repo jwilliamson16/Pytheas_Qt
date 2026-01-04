@@ -620,7 +620,7 @@ def make_seq_coverage_plot(mol, output_file):
                     enuff_rows = True
                     break
             if not enuff_rows:
-                # print("not enough rows")
+                print("not enough rows")
     
     
                 
