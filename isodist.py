@@ -12,7 +12,7 @@ import os
 # from scipy.fft import rfft, irfft,rfftfreq
 # from scipy.optimize import least_squares
 # import numpy as np
-# from matplotlib import pyplot as plt
+from matplotlib import pyplot as plt
 # import copy
 # import time
 from datetime import datetime
@@ -38,7 +38,7 @@ from isodist_functions import (create_atom_dict, create_model,
                                plot_obs_calc, find_active_residues, 
                                initialize_fit_model, fit_isotope_distribution, 
                                isodist_setup, Load_thru_RT, Load_thru_Minispec,
-                               Load_thru_RT_fit)
+                               Load_thru_RT_fit, filter_data, filter_isotopologs)
 
 from minispectrum_functions import (miniSpectrum, plot_minispectrum, build_rt_indices, 
                                     build_minispec_dict, extract_minispectra,
@@ -46,6 +46,8 @@ from minispectrum_functions import (miniSpectrum, plot_minispectrum, build_rt_in
 
 # from mod_seq_functions import parse_mod_seq, generate_mod_seq
 from pytheas_global_vars import pgv,pgc
+from mod_seq_functions import generate_mod_seq, generate_mod_seq_ends
+
 # from pytheas_objects import fragment_sequence
 
 
@@ -65,8 +67,18 @@ def isodist():
     # STEP 1:  initialize minispectra from match output
     print()
     print("STEP 1:  initializing minispectra")
-    pgv.top_match_df = pd.DataFrame.from_dict(pgv.top_match_dict, orient = "index") # build dataframe from top_match_dict
-    pgv.minispec = {idx:miniSpectrum(idx, row) for idx, row in pgv.top_match_df.iterrows()} # fast
+    # pgv.top_match_df = pd.DataFrame.from_dict(pgv.top_match_dict, orient = "index") # build dataframe from top_match_dict
+    pgv.top_match_df = pd.DataFrame.from_dict(pgv.match_dict, orient = "index") # build dataframe from top_match_dict
+    pgv.top_match_df.set_index("ms2_key", inplace = True)
+    
+    pgv.top_match_df['topolog'] = pgv.top_match_df['topolog'].astype(int)
+    filter_set = [
+        ["Sp", 0.1, 100]
+        ]
+    pgv.top_filter_df = filter_data(pgv.top_match_df, filter_set)
+    pgv.top_filter_df = filter_isotopologs(pgv.top_filter_df) # should do this in match
+    
+    pgv.minispec = {idx:miniSpectrum(idx, row) for idx, row in pgv.top_filter_df.iterrows()} # fast
     
     step1_end = datetime.now()
     
@@ -93,6 +105,8 @@ def isodist():
     # STEP3:  build minispectra
     print()
     print("STEP 3:  extracting minispectra from mzML")
+    
+    
     for idx, ms in pgv.minispec.items():
         ms.set_mz_window()  # experimental mz array from last scan
         ms.set_rt_window()
@@ -116,9 +130,10 @@ def isodist():
     if pgv.load_rt_fit == "y":
         Load_thru_RT_fit()
     else:
-        rt_data_rows = []
+        pgv.rt_data_rows = []
         for i in pgv.minispec.keys():
-            rt_data_rows.append(fit_rt_peak(i))
+            print()
+            pgv.rt_data_rows.append(fit_rt_peak(i))
         
         for i in pgv.minispec.keys():
             sum_spectra(i)
@@ -133,7 +148,7 @@ def isodist():
     print("STEP5: fitting of isotope distributions")
     isodist_setup()
     
-    data_rows = [] # hold column data to build dataframe
+    pgv.data_rows = [] # hold column data to build dataframe
     ctr = 0
     nspec = len(pgv.minispec)
     
@@ -144,16 +159,27 @@ def isodist():
     for i in pgv.minispec.keys():
         print()
         print("############## fitting # ", ctr, " of ", nspec, " key = ", i)
-        data_rows.append(fit_isotope_distribution(i))
+        pgv.data_rows.append(fit_isotope_distribution(i))
+        if "plotfit" in pgv.isodist_plot_options:
+            #TODO fix this mess with no sequence in match_df
+            ms = pgv.minispec[i]
+            seq = generate_mod_seq_ends(ms.frag3)
+            peak_root = "_".join([str(i), ms.mol, seq, str(ms.z)])
+            plotfile = os.path.join(pgv.isodist_plot_dir, peak_root + ".png")
+            plot_minispectrum(i)
+            plt.savefig(plotfile, dpi = 300)
+
+        if "plotfit" in pgv.isodist_plot_options:
+            plot_minispectrum(i)
         ctr += 1
     
     pgv.minispec_isodist = pgv.minispec.copy()
     save_pickle_set(pgc.isodist_fit_pickle, pgv.job_dir)
     
-    isodist_df = pd.DataFrame(data_rows)
-    rt_df = pd.DataFrame(rt_data_rows)
-    merged_df = pgv.top_match_df.join(rt_df.set_index(pgv.top_match_df.index))
-    merged_df2 = merged_df.join(isodist_df.set_index(pgv.top_match_df.index))
+    isodist_df = pd.DataFrame(pgv.data_rows)
+    rt_df = pd.DataFrame(pgv.rt_data_rows)
+    merged_df = pgv.top_match_df.join(rt_df.set_index(pgv.top_filter_df.index))
+    merged_df2 = merged_df.join(isodist_df.set_index(pgv.top_filter_df.index))
     
     isodist_job = pgv.job_dir.split("_")[-1]
     isodist_output = os.path.join(pgv.job_dir, "isodist_output_" + isodist_job + ".xlsx")

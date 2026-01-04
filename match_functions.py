@@ -13,6 +13,7 @@ import bisect
 import copy
 import os
 import xlsxwriter
+from copy import deepcopy
 
 import numpy as np
 import pandas as pd
@@ -21,6 +22,7 @@ from matplotlib.lines import Line2D
 
 from pytheas_global_vars import pgv, pgc
 from pytheas_objects import fragment_sequence, MS2_spectrum
+from pytheas_IO import read_pytheas_file
 from mod_seq_functions import generate_molecular_graph, generate_mod_seq, generate_mod_seq_ends
 from scoring_functions import (ppm_range, ppm_offset, sumI_all, sumI, n_calc, L_calc,
                                 consecutive_series)
@@ -468,26 +470,30 @@ def output_match_dict_file(match_dict, output_file):
     workbook.close()
     
 def unpack_match_dict(ms2_match_dict):
-    unpacked_dict = {}
+    pgv.unpacked_match_dict = {}
     ukey = 0
     for ms2_key, mdict in ms2_match_dict.items(): 
         for midx, match_dict in mdict.items():
-            unpacked_dict[ukey] = {"ms2_key": ms2_key, "match_index": midx}
-            unpacked_dict[ukey].update(match_dict)
+            pgv.unpacked_match_dict[ukey] = {"ms2_key": ms2_key, "match_index": midx}
+            pgv.unpacked_match_dict[ukey].update(match_dict)
             ukey += 1
+     
+    if pgv.filter_matches == 'y':
+        apply_match_filters()
+ 
             
-    top_match_dict = {}
+    pgv.top_match_dict = {}
     if pgv.ranking == "Sp":
         rank = "Sp_rank"
     else:
         rank = "Xc_rank"
 
-    for ukey, udict in unpacked_dict.items():
+    for ukey, udict in pgv.unpacked_match_dict.items():
         if pgv.ranking in udict:
             if udict[rank] == 1:
-                top_match_dict[ukey] = udict
+                pgv.top_match_dict[ukey] = udict
  
-    return unpacked_dict, top_match_dict
+    # return unpacked_dict, top_match_dict
 
 def format_match_dict(match_dict):   # entry from the unpacked dict...reformat for table output
 
@@ -954,3 +960,29 @@ def match_output_for_massacre():
     massacre_df.to_csv(csv_file, index = False)
     massacre_df.to_csv(pythid_file, index = False)
     
+def apply_match_filters():
+        pgv.prefilter_unpacked_match_dict = deepcopy(pgv.unpacked_match_dict)
+        read_pytheas_file("match_filter_file")
+        ms2_match_df = pd.DataFrame.from_dict(pgv.unpacked_match_dict, orient = "index")
+        
+        # filter isotopologues
+        
+        ms2_match_light_df = ms2_match_df[(ms2_match_df["label"] == "light") & (ms2_match_df["topolog"].astype(int) >= 0)]
+        ms2_match_heavy_df = ms2_match_df[(ms2_match_df["label"] == "heavy") & (ms2_match_df["topolog"].astype(int) <= 0)]
+        ms2_match_df = pd.concat([ms2_match_light_df, ms2_match_heavy_df])
+        
+        
+        
+        print("ms2_match_df columns: ", ms2_match_df.columns)
+        print("applying filters", pgv.filter_dict)
+        for f, fdict in pgv.filter_dict.items():
+            print("match filtering on ", f, fdict)
+            if f not in ms2_match_df.columns:
+                continue
+            if fdict["on_off"] != "on":
+                continue
+            print("match_filtering ", f)
+            ms2_match_df = ms2_match_df[(ms2_match_df[f] >= fdict["lower"]) & (ms2_match_df[f] <= fdict["upper"])]
+        pgv.unpacked_match_dict =  ms2_match_df.to_dict(orient = "index")
+        
+            

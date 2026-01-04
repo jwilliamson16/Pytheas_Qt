@@ -7,6 +7,7 @@ Created on Mon Nov 24 14:00:34 2025
 """
 
 import copy
+from copy import deepcopy
 from datetime import datetime
 import os
 
@@ -14,6 +15,7 @@ from scipy.fft import rfft, irfft,rfftfreq
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import least_squares
+import pandas as pd
 
 
 # from isodist_global_variables import pgv
@@ -21,7 +23,7 @@ from pytheas_global_vars import pgv, pgc
 from pytheas_IO import read_pytheas_file, load_pickle_set
 
 from mod_seq_functions import generate_mod_seq, generate_mod_seq_ends
-from minispectrum_functions import plot_minispectrum
+# from minispectrum_functions import plot_minispectrum
 from PyQt5.QtWidgets import  QFileDialog
 
 
@@ -384,10 +386,14 @@ def fit_isotope_distribution(match_df_idx):
 
     print("SEQUENCE, z = ", seq, z)
     
-    peak_root = "_".join([str(match_row["ms2_key"]), ms.mol, seq, str(z)])
+    peak_root = "_".join([str(match_df_idx), ms.mol, seq, str(z)])
     seqlab = ms.mol
     
-    ri_array = ms.rt_slice  # experimental spectrum
+    #TODO make this an option
+    if pgv.fit_sum_spectra == 'y':
+        ri_array = ms.rt_slice_sum  # sum of rt fit window experimental spectrum
+    else:
+        ri_array = ms.rt_slice  # experimental spectrum
     rmz_array = ms.mini_mz
 
     nmz = 0 # counter to fill experimental arrays
@@ -399,42 +405,39 @@ def fit_isotope_distribution(match_df_idx):
     # build arrays for fitting, mz_ptr has indices from oversampled theo distribution
     for rmz, ri in zip(rmz_array, ri_array):
         n = int((rmz * z - mz_hd)*pgc.scale_mz + 0.5)
-
         pgv.mz_ptr[nmz] = n
         xobs[nmz] = (rmz * z - mz_hd) * pgc.scale_mz
         yobs[nmz] = ri
         nmz += 1
         
+    #TODO figure out better way to get amp from peak height
     x_init = pgv.x_init.copy()
-    x_init[3] = max(yobs)
-    x_init[4] = max(yobs)
+    x_init[3] = max(yobs)/pgc.amp_scale_factor  # initial AMP parameters
+    x_init[4] = max(yobs)/pgc.amp_scale_factor
     
-#TODO are GW and AMP anticorrelated?  
-    
-    if "showguess" in pgv.isodist_plot_options:     # calc initial guess
+    if "showguess" in pgv.isodist_plot_options:     # calc initial guess  # OMIT
         
         mz_spec, spec = calc_isodist(x_init, "spectrum", frag3, yobs, mz_hd, z)
         resid = calc_isodist(pgv.x_init, "residuals", frag3, 12*yobs, mz_hd, z)
         plot_obs_calc(mz_spec, yobs, mz_spec, spec, seq + " Initial guess")
      
-    prelim_end = datetime.now()
-    fit_start = prelim_end
-
-    lsq_soln = least_squares(calc_isodist, pgv.x_init, verbose = 1, bounds = pgv.xbounds, 
+    fit_start = datetime.now()
+ 
+    lsq_soln = least_squares(calc_isodist, x_init, verbose = 1, bounds = pgv.xbounds, 
                              x_scale = 'jac', max_nfev=100,
                              args =("residuals", frag3, yobs, mz_hd, z))
     x_fit = lsq_soln.x
     chisq = 2.0 *lsq_soln.cost/(pgc.sig_global*pgc.sig_global*nmz)  # factor of 2 to make cost correpsond to chisquared
         
-    xfit = [float(round(x,6)) for x in x_fit]
+    xfit = [float(round(x,6)) for x in x_fit] # for display
     
     print("fit time = ", datetime.now()- fit_start)
     print(" solution = ", xfit)
            
     mz_fit, fit = calc_isodist(x_fit, "spectrum", frag3, yobs, mz_hd, z)
-    resid = calc_isodist(pgv.x_init, "residuals", frag3, yobs, mz_hd, z)  # can get this from lsq_soln
+    resid = calc_isodist(x_init, "residuals", frag3, yobs, mz_hd, z)  # can get this from lsq_soln
 
-    if "showfit" in pgv.isodist_plot_options:
+    if "showfit" in pgv.isodist_plot_options:   #OMIT THIS? 
         plot_obs_calc(mz_fit, yobs, mz_fit, fit, seq + " Final Fit")
    
     # precalculate frac_lab
@@ -444,9 +447,7 @@ def fit_isotope_distribution(match_df_idx):
     else:
         frac_lab = [0 for x, l in zip(x_fit,pgv.parlabel) if "AMP" in l]
     
-   # parameter errors
-   
-   # Extract the Jacobian and calculate covariance and standard errors
+    # Extract the Jacobian and calculate covariance and standard errors in parameters
     J = lsq_soln.jac
     m = len(rmz_array)  # Number of data points
     n = len(lsq_soln.x)   # Number of parameters
@@ -472,11 +473,8 @@ def fit_isotope_distribution(match_df_idx):
     
     pars = pgv.parlabel
     par_labels = pars
-    # par_labels = ["_".join(["rt", p, "fit"]) for p in pars]
     par_err_labels = ["_".join([p, "err"]) for p in pars]
-    # par_err_labels = [l + "_err" for l in parlabels]
     par_relerr_labels = ["_".join([p, "re"]) for p in pars]
-    # par_relerr_labels = [l + "re" for l in parlabels]
     
     for p, v in zip(par_labels, x_fit):
         setattr(ms, p, v)
@@ -485,32 +483,21 @@ def fit_isotope_distribution(match_df_idx):
     for p, v in zip(par_relerr_labels, rel_err):
        setattr(ms, p, v)
 
-    
-    
-    
     # assemble output columns
     column_data =[peak_root, seqlab, seq, moz, z, chisq, mz_hd]
     column_data = column_data + x_fit.tolist() + frac_lab + perr.tolist() + rel_err.tolist() + [max_fit, min_fit, max_rsd, min_rsd] + avg_fit + avg_wr
     
     column_dict = {col:dat for col, dat in zip(pgv.column_labels, column_data)}
 
-# todo store this in minispectrum
-
+    #TODO make this .iso_fit
     ms.mz_fit = fit
+    ms.mz_resid = resid
 
-#TODO make this a function
-    if "plotfit" in pgv.isodist_plot_options:
-# write out fit plot
-        plotfile = os.path.join(pgv.isodist_plot_dir, peak_root + ".png")
-        plot_minispectrum(ms)
-        # plt.plot(ms.mini_mz, yobs,".k")
-        # plt.ylabel("amplitude")
-        # plt.xlabel("m/z")
-        # plt.title(seq + " m0 = " + str(round(mz_hd,3)))
-        # plt.plot(ms.mini_mz, fit, "-r")
-        plt.savefig(plotfile, dpi = 300)
+    # if "plotfit" in pgv.isodist_plot_options:
+    #     plotfile = os.path.join(pgv.isodist_plot_dir, peak_root + ".png")
+    #     plot_minispectrum(ms)
+    #     plt.savefig(plotfile, dpi = 300)
         
-
     return column_dict
 
 
@@ -796,6 +783,7 @@ def plot_obs_calc(obs_x, obs_y, calc_x, calc_y, title):
         plt.plot(calc_x, calc_y,"-b")
         plt.show()
 
+# TODO change input to load thru...
 def Load_thru_RT():
     
     load_dir = QFileDialog.getExistingDirectory(None,"Select Job Directory", pgv.working_dir)
@@ -824,7 +812,7 @@ def Load_thru_RT_fit():
     print("loading previous minispec from ", load_dir)
     load_pickle_set(pgc.isodist_minispec_pickle, load_dir)
     print("loading previous RT_fit from ", load_dir)
-    load_pickle_set(pgc.isodist_rtfit_pickle, load_dir)
+    load_pickle_set(pgc.isodist_rt_fit_pickle, load_dir)
     
     pgv.minispec = pgv.minispec_rt.copy()
     
@@ -844,5 +832,32 @@ def Load_thru_Isodist():
     
     pgv.minispec = pgv.minispec_isodist.copy()
    
+def filter_data(df, filter_set): # TOOLKIT FUNCTION
+    new_df = deepcopy(df)
+    print("before filter", len(df))
+    for col, lo, hi  in filter_set:
+        if col in new_df.columns:
+            new_df = new_df[(lo <= new_df[col]) & (new_df[col] <= hi)]
+            print("after ", col, "filter: ", len(new_df))
+        else:
+            print(" no column ", col, " in df ", "...skipping filter")
+    final_df = deepcopy(new_df)
+    return final_df
+
+def filter_isotopologs(df ): # TOOLKIT FUNCTION
+    new_df = deepcopy(df)
+    print("before isotopolog filter", len(df))
     
-    
+    print("unique_values:", df["topolog"].unique())
+    new_df["topolog"] = new_df["topolog"].astype(int)
+    print(df["label"].unique())
+    light_df = new_df[(new_df['label'] == "light") & (new_df['topolog'] >= 0)]
+    heavy_df = new_df[(new_df['label'] == "heavy") & (new_df['topolog'] <= 0)]
+    print(len(light_df), len(heavy_df))
+ 
+    final_df = pd.concat([light_df, heavy_df])
+    print("after isotopolog filter", len(final_df))
+    return final_df
+
+
+

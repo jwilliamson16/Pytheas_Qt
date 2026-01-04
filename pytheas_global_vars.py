@@ -94,7 +94,7 @@ class PGC: # class for global constants
   
         isodist_rt_pickle = ["rt_index_dict", "rt_scan_dict", "rt_list", "mz_exp"]
         isodist_minispec_pickle = ["rt_dict", "minispec"]
-        isodist_rt_fit_pickle = ["minispec_rt"]
+        isodist_rt_fit_pickle = ["minispec_rt", "rt_data_rows"]
         isodist_fit_pickle = ["minispec_isodist"]
         
         # discovery_json = ["master_discovery", "unpacked_discovery", "discovery",
@@ -118,7 +118,8 @@ class PGC: # class for global constants
         sig_global = 100.0
         rtpad = 60.0   # RT window for peak fitting
         mzpad = 2.0    # mz window for peak fitting
-
+        amp_scale_factor = 20000.0  # approx scale factor for max peak to initial amplitude fit parameter
+        # FWIW this is about npt/2Pi
         
         for var, val in locals().items():  # shortcut to avoid self.var for each var above
             if var == "self":

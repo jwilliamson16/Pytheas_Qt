@@ -415,3 +415,11 @@ def save_pickle_set(obj_list, load_dir):
         pickle_obj = getattr(pgv, obj)
         pickle.dump(pickle_obj, open(pickle_file, "wb" ))
         
+def read_filter_file(file):
+    print("reading filter file")
+    filter_df = pd.read_excel(file, sheet_name=0)
+    print("filter_df = ", filter_df)
+    pgv.filter_dict = filter_df.set_index("column").to_dict('index')
+    print("filter_dict = ", pgv.filter_dict)
+     
+    

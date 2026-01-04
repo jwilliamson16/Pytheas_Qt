@@ -10,6 +10,7 @@ GitHub project repository: https://github.com/ldascenzo/pytheas
 from datetime import datetime
 import os
 from pathlib import Path
+import pandas as pd
 
 
 from pytheas_global_vars import pgv, pgc
@@ -17,7 +18,8 @@ from pytheas_IO import read_pytheas_file, save_pickle_set
 from match_functions import (match_spectra, unpack_match_dict, iTRAQ_quantitation, 
                                  output_match_dict_file, match_output_keys, 
                                  consolidated_match_output, make_match_plot, 
-                                 make_long_match_plot, plot_ms2_spectra)
+                                 make_long_match_plot, plot_ms2_spectra,
+                                 apply_match_filters)
 
 from match_functions import ppm_offset_plot,top_Sp_histogram, match_output_for_massacre
 
@@ -37,7 +39,10 @@ def match():
     
     print()
     print("STEP 3:  GENERATE CONSOLIDATED MATCH REPORT")
-    pgv.unpacked_match_dict, pgv.top_match_dict = unpack_match_dict(pgv.ms2_match_dict)  # unpack ms2_key level to make flat dict with one entry per match
+            
+    
+    # pgv.unpacked_match_dict, pgv.top_match_dict = unpack_match_dict(pgv.ms2_match_dict)  # unpack ms2_key level to make flat dict with one entry per match
+    unpack_match_dict(pgv.ms2_match_dict)  # unpack ms2_key level to make flat dict with one entry per match, and filter 
  
     if pgv.use_iTRAQ == 'y':
         iTRAQ_quantitation() # adds iTRAQ to unpacked dict

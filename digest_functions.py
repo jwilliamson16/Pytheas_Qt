@@ -262,7 +262,7 @@ def generate_random_cut_list(seq3):
     return cut_index_list
 
 def process_cut_list(seq3, cut_list, mol, ufdict, frag_seq_key_list):
-
+     print("process_cut_list: cut_list ", cut_list)
      for fr,to,miss in cut_list:     
        if fr == 0:
            end5_list = pgv.mol_end5
@@ -328,7 +328,7 @@ def digest_sequence(mol, mdict, ufdict, enzyme): # process one sequence # digest
     frag_seq_key_list = []
     
     if enzyme == "none":
-        cut_index_list = [[0, len(seq3), 0]]
+        cut_index_list = [0, len(seq3)]
     
     elif enzyme == "nonspecific":
         cut_index_list = generate_random_cut_list(seq3)
@@ -339,7 +339,9 @@ def digest_sequence(mol, mdict, ufdict, enzyme): # process one sequence # digest
     else:        
         cut_index_list = generate_cut_list(seq3, enzyme)
     
+    # print("digest_sequence: cut_index_list", cut_index_list)
     misses = min(pgv.miss, len(cut_index_list)-2) # of matches - 2 ends
+    # print("digest_sequence: misses", misses)
     cut_list = [[cut_index_list[i], cut_index_list[i+miss + 1], miss] # loop thru cut_index_list for each miss 
                 for miss in range(misses+1) 
                 for i in range(len(cut_index_list) - miss - 1)]
@@ -606,10 +608,10 @@ def make_seq_coverage_plot(mol, output_file):
                 continue
             # length = len(pgv.mol_dict[mol]["raw_seq"])
             fr, to = map(int,r.split("_"))   # these are sequence indices
-            print(seq,fr,to)
+            # print(seq,fr,to)
             enuff_rows = False
             for i in range(max_rows):
-                print("row", i)
+                # print("row", i)
                 ok = sum(seqmat[i,fr-1:to])
                 if ok == 0:
                     seqmat[i,fr-1:to] = np.ones(to-fr + 1)
@@ -618,7 +620,7 @@ def make_seq_coverage_plot(mol, output_file):
                     enuff_rows = True
                     break
             if not enuff_rows:
-                print("not enough rows")
+                # print("not enough rows")
     
     
                 
@@ -656,7 +658,7 @@ def make_seq_coverage_plot(mol, output_file):
             if seqmat[row_idx,col_idx] == 1:
                 # lm.color_matrix[row_idx, col_idx] = pgc.dark_blue
                 lm.color_matrix[row_idx, col_idx] = sequence_color(1, seq3[col_idx])
-                print("color_mat: ", row_idx, col_idx, seq3[col_idx], sequence_color(1,seq3[col_idx]))
+                # print("color_mat: ", row_idx, col_idx, seq3[col_idx], sequence_color(1,seq3[col_idx]))
                 if cleavage_box and boxmat[row_idx, col_idx] == 7:
                     lm.lw_matrix[row_idx, col_idx] = 7
 
