@@ -123,6 +123,8 @@ def Load_Global_Vars(): # button fuction
         var = row["names"]
         val = row["values"]
         if var in pgvdict:
+            if var == "working_dir" or var == "pytheas_dir":
+                continue
             vtype = pgvdict[var]["data_type"]
             vval = PGVStrToType(vtype,val)
         try:
